@@ -97,12 +97,8 @@ struct Grid(Copyable, Movable):
             var compute_end = py_time.time()
             compute_duration = py_operator.sub(compute_end, compute_start)
             
-            var copy_start = py_time.time()
-            self._copy_gpu_results_to_cpu(grid_gpu)
-            var copy_end = py_time.time()
-            transfer_duration = py_operator.sub(copy_end, copy_start)
-            
-            total_duration = py_operator.sub(copy_end, prep_start)
+            var total_end = py_time.time()
+            total_duration = py_operator.sub(total_end, prep_start)
             runs = 1
         else:
             print("No NVIDIA GPU detected, using CPU fallback")

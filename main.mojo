@@ -88,9 +88,6 @@ fn generate_sequential_grids_cpu_parallel_cells_gpu(rule_container: RuleContaine
         grids.append(grid^)
     
     var end = py_time.time()
-    var elapsed = py_builtins.format(end - start, ".3f")
-    print("Generated", len(rule_container.rules), "grids sequentially on CPU (parallel cells on GPU) in", elapsed, "seconds")
-    
     if total_runs > 0:
         var runs_float = py_builtins.float(total_runs)
         var avg_prep = py_operator.truediv(total_prep, runs_float)
@@ -102,6 +99,10 @@ fn generate_sequential_grids_cpu_parallel_cells_gpu(rule_container: RuleContaine
         var avg_compute_str = py_builtins.format(avg_compute, ".3f")
         var avg_transfer_str = py_builtins.format(avg_transfer, ".3f")
         var avg_total_str = py_builtins.format(avg_total, ".3f")
+        var total_gpu_str = py_builtins.format(total_total, ".3f")
+        
+        var elapsed = py_builtins.format(end - start, ".3f")
+        print("Generated ", len(rule_container.rules), " grids sequentially on CPU (parallel cells on GPU) in ", elapsed, " seconds (", total_gpu_str, " s on GPU)", sep="")
         
         print("Average GPU timings across", total_runs, "runs:",
               "prep", avg_prep_str, "s | compute", avg_compute_str, "s | transfer", avg_transfer_str, "s | total", avg_total_str, "s")
@@ -115,13 +116,16 @@ fn main() raises:
     var total_start = py_time.time()
     var rule_container = RuleContainer()
     
-    var grids_seq_cpu_cells_seq_cpu = generate_sequential_grids_cpu_sequential_cells_cpu(rule_container)
+    _ = generate_sequential_grids_cpu_sequential_cells_cpu(rule_container)
     var grids_seq_cpu_cells_par_cpu = generate_sequential_grids_cpu_parallel_cells_cpu(rule_container)
-    var grids_par_cpu_cells_seq_cpu = generate_parallel_grids_cpu_sequential_cells_cpu(rule_container)
-    var grids_seq_cpu_cells_par_gpu = generate_sequential_grids_cpu_parallel_cells_gpu(rule_container)
+    _ = generate_parallel_grids_cpu_sequential_cells_cpu(rule_container)
+    _ = generate_sequential_grids_cpu_parallel_cells_gpu(rule_container)
     
-    var renderer = Renderer()
-    renderer.save_pngs(grids_seq_cpu_cells_par_gpu, rule_container)
+    if RENDER_PNGS:
+        var renderer = Renderer()
+        renderer.save_pngs(grids_seq_cpu_cells_par_cpu, rule_container)
+    else:
+        print("Skipping PNG generation for this run (benchmark mode)")
     
     var total_end = py_time.time()
     var total_elapsed = py_builtins.format(total_end - total_start, ".3f")

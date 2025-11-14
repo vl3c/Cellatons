@@ -1,8 +1,9 @@
 from python import Python
 
-alias WIDTH: Int = 2000
-alias HEIGHT: Int = 1000
-alias CELL_SIZE: Int = 5
+alias WIDTH: Int = 20_000
+alias HEIGHT: Int = 10_000
+alias CELL_SIZE: Int = 2
+alias RENDER_PNGS: Bool = True
 
 fn get_filename(output_name: String) -> String:
     var filename = String("generated/")
