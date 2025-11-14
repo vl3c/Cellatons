@@ -2,6 +2,7 @@ from python import Python
 
 alias WIDTH: Int = 2000
 alias HEIGHT: Int = 1000
+alias CELL_SIZE: Int = 5
 
 fn get_filename(output_name: String) -> String:
     var filename = String("generated/")

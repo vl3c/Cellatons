@@ -1,8 +1,9 @@
-from python import Python
+from python import Python, PythonObject
 from rule import Rule
 from algorithm import parallelize
-
-alias CELL_SIZE: Int = 5
+from sys.info import has_nvidia_gpu_accelerator
+from common import CELL_SIZE
+from gpu_timing_result import GPUTimingResult
 
 struct Grid(Copyable, Movable):
     var cells: List[List[Int]]
@@ -41,6 +42,12 @@ struct Grid(Copyable, Movable):
     fn get_cell(self, row: Int, col: Int) -> Int:
         return self.cells[row][col]
     
+    fn get_width(self) -> Int:
+        return self.width
+    
+    fn get_height(self) -> Int:
+        return self.height
+    
     fn generate_parallel_cpu(mut self, rule: Rule):
         self.cells[0][self.width // 2] = 1
         
@@ -60,43 +67,110 @@ struct Grid(Copyable, Movable):
         self.cells[0][self.width // 2] = 1
         
         for row in range(1, self.height):
-            for col in range(1, self.width - 1):
-                var left = self.cells[row - 1][col - 1]
-                var center = self.cells[row - 1][col]
-                var right = self.cells[row - 1][col + 1]
-                
-                self.cells[row][col] = rule.apply(left, center, right)
-    
-    fn print_to_console(self):
-        for row in range(self.height):
-            var line = String("")
-            for col in range(self.width):
-                if self.cells[row][col] == 1:
-                    line += "O"
-                else:
-                    line += " "
-            print(line)
-    
-    fn save_png(self, filename: String) raises:
-        var PIL = Python.import_module("PIL.Image")
-        var builtins = Python.import_module("builtins")
-        
-        var img_width = self.width * CELL_SIZE
-        var img_height = self.height * CELL_SIZE
-        
-        var size = builtins.tuple([img_width, img_height])
-        var img = PIL.new("RGB", size, "white")
-        var pixels = img.load()
-        
-        for row in range(self.height):
-            for col in range(self.width):
-                if self.cells[row][col] == 1:
-                    for py in range(CELL_SIZE):
-                        for px in range(CELL_SIZE):
-                            var x = col * CELL_SIZE + px
-                            var y = row * CELL_SIZE + py
-                            var black = builtins.tuple([0, 0, 0])
-                            pixels[x, y] = black
-        
-        img.save(filename)
+            self._apply_rule_cpu_row(row, rule)
 
+    fn generate_parallel_cells_gpu(mut self, rule: Rule) raises -> GPUTimingResult:
+        # Set initial cell in the middle of the first row
+        self.cells[0][self.width // 2] = 1
+        
+        var py_time = Python.import_module("time")
+        var py_builder = Python.import_module("builtins")
+        var py_operator = Python.import_module("operator")
+        var zero = py_builder.float(0.0)
+        var prep_duration = zero
+        var compute_duration = zero
+        var transfer_duration = zero
+        var total_duration = zero
+        var runs = 0
+        # Check if NVIDIA GPU is available
+        if has_nvidia_gpu_accelerator():
+            var cp = Python.import_module("cupy")
+            
+            var prep_start = py_time.time()
+            var grid_gpu = self._init_gpu_grid(cp, py_builder, py_operator)
+            var allowed_array = self._create_allowed_patterns_array(rule, cp, py_builder)
+            var prep_end = py_time.time()
+            prep_duration = py_operator.sub(prep_end, prep_start)
+            
+            var compute_start = py_time.time()
+            self._compute_rows_on_gpu(grid_gpu, allowed_array, cp, py_operator)
+            var compute_end = py_time.time()
+            compute_duration = py_operator.sub(compute_end, compute_start)
+            
+            var copy_start = py_time.time()
+            self._copy_gpu_results_to_cpu(grid_gpu)
+            var copy_end = py_time.time()
+            transfer_duration = py_operator.sub(copy_end, copy_start)
+            
+            total_duration = py_operator.sub(copy_end, prep_start)
+            runs = 1
+        else:
+            print("No NVIDIA GPU detected, using CPU fallback")
+            # CPU fallback
+            for row in range(1, self.height):
+                self._apply_rule_cpu_row(row, rule)
+        
+        return GPUTimingResult(prep_duration, compute_duration, transfer_duration, total_duration, runs)
+
+    fn _apply_rule_cpu_row(mut self, row: Int, rule: Rule):
+        for col in range(1, self.width - 1):
+            var left = self.cells[row - 1][col - 1]
+            var center = self.cells[row - 1][col]
+            var right = self.cells[row - 1][col + 1]
+            
+            self.cells[row][col] = rule.apply(left, center, right)
+
+    fn _init_gpu_grid(self, cp: PythonObject, builtins: PythonObject, operator: PythonObject) raises -> PythonObject:
+        var grid_shape = builtins.tuple([self.height, self.width])
+        var grid_gpu = cp.zeros(grid_shape, cp.int32)
+        var center_index = builtins.tuple([0, self.width // 2])
+        operator.setitem(grid_gpu, center_index, 1)
+        return grid_gpu
+    
+    fn _create_allowed_patterns_array(self, rule: Rule, cp: PythonObject, builtins: PythonObject) raises -> PythonObject:
+        var allowed_patterns = self._build_allowed_patterns(rule)
+        var py_allowed = builtins.list()
+        for idx in range(len(allowed_patterns)):
+            py_allowed.append(allowed_patterns[idx])
+        return cp.asarray(py_allowed, cp.int32)
+    
+    fn _compute_rows_on_gpu(self, grid_gpu: PythonObject, allowed_array: PythonObject, cp: PythonObject, operator: PythonObject) raises:
+        for row in range(1, self.height):
+            var prev_row = grid_gpu.__getitem__(row - 1)
+            var left = cp.roll(prev_row, 1)
+            var center = prev_row
+            var right = cp.roll(prev_row, -1)
+            
+            var codes = left * 4 + center * 2 + right
+            var next_row = cp.isin(codes, allowed_array).astype(cp.int32)
+            
+            operator.setitem(next_row, 0, 0)
+            operator.setitem(next_row, self.width - 1, 0)
+            
+            operator.setitem(grid_gpu, row, next_row)
+    
+    fn _copy_gpu_results_to_cpu(mut self, grid_gpu: PythonObject) raises:
+        var result_gpu = grid_gpu.tolist()
+        for row in range(self.height):
+            var row_values = result_gpu.__getitem__(row)
+            for col in range(self.width):
+                var value_py = row_values.__getitem__(col)
+                if value_py == 0:
+                    self.cells[row][col] = 0
+                else:
+                    self.cells[row][col] = 1
+    
+    fn _pattern_to_int(self, pattern: String) -> Int:
+        var value: Int = 0
+        for idx in range(len(pattern)):
+            value = value << 1
+            if pattern[idx] == "1":
+                value += 1
+        return value
+    
+    fn _build_allowed_patterns(self, rule: Rule) -> List[Int]:
+        var allowed = List[Int]()
+        for group in range(len(rule.pattern_groups)):
+            for idx in range(len(rule.pattern_groups[group])):
+                allowed.append(self._pattern_to_int(rule.pattern_groups[group][idx]))
+        return allowed^
