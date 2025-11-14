@@ -4,7 +4,7 @@ from algorithm import parallelize
 
 alias CELL_SIZE: Int = 5
 
-struct Grid:
+struct Grid(Copyable, Movable):
     var cells: List[List[Int]]
     var width: Int
     var height: Int
@@ -20,13 +20,28 @@ struct Grid:
                 row.append(0)
             self.cells.append(row^)
     
+    fn __copyinit__(out self, existing: Self):
+        self.width = existing.width
+        self.height = existing.height
+        self.cells = List[List[Int]]()
+        for i in range(len(existing.cells)):
+            var row = List[Int]()
+            for j in range(len(existing.cells[i])):
+                row.append(existing.cells[i][j])
+            self.cells.append(row^)
+    
+    fn __moveinit__(out self, deinit existing: Self):
+        self.width = existing.width
+        self.height = existing.height
+        self.cells = existing.cells^
+    
     fn set_cell(mut self, row: Int, col: Int, value: Int):
         self.cells[row][col] = value
     
     fn get_cell(self, row: Int, col: Int) -> Int:
         return self.cells[row][col]
     
-    fn generate(mut self, rule: Rule):
+    fn generate_parallel_cpu(mut self, rule: Rule):
         self.cells[0][self.width // 2] = 1
         
         for row in range(1, self.height):
@@ -40,6 +55,17 @@ struct Grid:
                     self.cells[row][col] = rule.apply(left, center, right)
             
             parallelize[compute_cell](self.width)
+    
+    fn generate_sequential_cpu(mut self, rule: Rule):
+        self.cells[0][self.width // 2] = 1
+        
+        for row in range(1, self.height):
+            for col in range(1, self.width - 1):
+                var left = self.cells[row - 1][col - 1]
+                var center = self.cells[row - 1][col]
+                var right = self.cells[row - 1][col + 1]
+                
+                self.cells[row][col] = rule.apply(left, center, right)
     
     fn print_to_console(self):
         for row in range(self.height):
