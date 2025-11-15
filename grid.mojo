@@ -69,7 +69,7 @@ struct Grid(Copyable, Movable):
         for row in range(1, self.height):
             self._apply_rule_cpu_row(row, rule)
 
-    fn generate_parallel_cells_gpu(mut self, rule: Rule) raises -> GPUTimingResult:
+    fn generate_parallel_cells_cupy_gpu(mut self, rule: Rule) raises -> GPUTimingResult:
         # Set initial cell in the middle of the first row
         self.cells[0][self.width // 2] = 1
         

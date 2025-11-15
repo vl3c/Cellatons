@@ -79,7 +79,7 @@ fn generate_sequential_grids_cpu_parallel_cells_gpu(rule_container: RuleContaine
     
     for rule in rule_container.rules:
         var grid = Grid(WIDTH, HEIGHT)
-        var stats = grid.generate_parallel_cells_gpu(rule)
+        var stats = grid.generate_parallel_cells_cupy_gpu(rule)
         total_prep = py_operator.add(total_prep, stats.prep)
         total_compute = py_operator.add(total_compute, stats.compute)
         total_transfer = py_operator.add(total_transfer, stats.transfer)
@@ -102,9 +102,9 @@ fn generate_sequential_grids_cpu_parallel_cells_gpu(rule_container: RuleContaine
         var total_gpu_str = py_builtins.format(total_total, ".3f")
         
         var elapsed = py_builtins.format(end - start, ".3f")
-        print("Generated ", len(rule_container.rules), " grids sequentially on CPU (parallel cells on GPU) in ", elapsed, " seconds (", total_gpu_str, " s on GPU)", sep="")
+        print("Generated", len(rule_container.rules), "grids sequentially on CPU (parallel cells on CuPy GPU) in", elapsed, "seconds (", total_gpu_str, "s on CuPy GPU)", sep=" ")
         
-        print("Average GPU timings across", total_runs, "runs:",
+        print("Average CuPy GPU timings across", total_runs, "runs:",
               "prep", avg_prep_str, "s | compute", avg_compute_str, "s | transfer", avg_transfer_str, "s | total", avg_total_str, "s")
     
     return grids^
