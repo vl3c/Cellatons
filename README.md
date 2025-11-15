@@ -16,7 +16,7 @@ A cellular automatons generator in [Mojo](https://www.modular.com/mojo), showcas
 ## Requirements
 
 - WSL Fedora (or Linux) environment
-- [Pixi](https://prefix.dev/docs/pixi/overview) for dependency management
+- [Pixi](https://pixi.sh) for dependency management
 - Mojo 0.25+ (MAX-nightly channel)
 - Python with `cupy` (CUDA-enabled GPU recommended)
 - Pillow (for PNG rendering)
