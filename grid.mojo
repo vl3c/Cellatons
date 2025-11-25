@@ -49,25 +49,41 @@ struct Grid(Copyable, Movable):
         return self.height
     
     fn generate_parallel_cpu(mut self, rule: Rule):
-        self.cells[0][self.width // 2] = 1
+        var center = self.width // 2
+        self.cells[0][center] = 1
+        
+        var left_bound = center
+        var right_bound = center
         
         for row in range(1, self.height):
-            @parameter
-            fn compute_cell(col: Int):
-                if col >= 1 and col < self.width - 1:
-                    var left = self.cells[row - 1][col - 1]
-                    var center = self.cells[row - 1][col]
-                    var right = self.cells[row - 1][col + 1]
-                    
-                    self.cells[row][col] = rule.apply(left, center, right)
+            # Expand bounds by 1 on each side, clamped to grid edges
+            left_bound = left_bound - 1 if left_bound > 1 else 1
+            right_bound = right_bound + 1 if right_bound < self.width - 2 else self.width - 2
+            var bound_width = right_bound - left_bound + 1
+            var lb = left_bound  # Capture for closure
             
-            parallelize[compute_cell](self.width)
+            @parameter
+            fn compute_cell(offset: Int):
+                var col = lb + offset
+                var left = self.cells[row - 1][col - 1]
+                var center_val = self.cells[row - 1][col]
+                var right = self.cells[row - 1][col + 1]
+                self.cells[row][col] = rule.apply(left, center_val, right)
+            
+            parallelize[compute_cell](bound_width)
     
     fn generate_sequential_cpu(mut self, rule: Rule):
-        self.cells[0][self.width // 2] = 1
+        var center = self.width // 2
+        self.cells[0][center] = 1
+        
+        var left_bound = center
+        var right_bound = center
         
         for row in range(1, self.height):
-            self._apply_rule_cpu_row(row, rule)
+            # Expand bounds by 1 on each side, clamped to grid edges
+            left_bound = left_bound - 1 if left_bound > 1 else 1
+            right_bound = right_bound + 1 if right_bound < self.width - 2 else self.width - 2
+            self._apply_rule_cpu_row_bounded(row, rule, left_bound, right_bound)
 
     fn generate_parallel_cells_cupy_gpu(mut self, rule: Rule) raises -> GPUTimingResult:
         # Set initial cell in the middle of the first row
@@ -115,6 +131,14 @@ struct Grid(Copyable, Movable):
             var right = self.cells[row - 1][col + 1]
             
             self.cells[row][col] = rule.apply(left, center, right)
+
+    fn _apply_rule_cpu_row_bounded(mut self, row: Int, rule: Rule, left_bound: Int, right_bound: Int):
+        for col in range(left_bound, right_bound + 1):
+            if col >= 1 and col < self.width - 1:
+                var left = self.cells[row - 1][col - 1]
+                var center = self.cells[row - 1][col]
+                var right = self.cells[row - 1][col + 1]
+                self.cells[row][col] = rule.apply(left, center, right)
 
     fn _init_gpu_grid(self, cp: PythonObject, builtins: PythonObject, operator: PythonObject) raises -> PythonObject:
         var grid_shape = builtins.tuple([self.height, self.width])
