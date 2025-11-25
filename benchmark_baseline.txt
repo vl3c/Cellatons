@@ -1,20 +1,32 @@
-Baseline Benchmark Results
-==========================
+Benchmark Results
+=================
 Grid Size: 20,000 x 10,000 (200 million cells)
 Rules: 3 (Rule 254, Rule 30, Rule 110)
 Date: 2025-11-25
 
-Results:
---------
+BEFORE (Original Implementation):
+---------------------------------
 Sequential CPU (sequential cells):     15.335s
 Sequential CPU (parallel cells):        4.002s
 Parallel grids CPU (sequential cells):  4.824s
-Sequential CPU (parallel cells GPU):   12.771s (6.329s GPU time)
+CuPy GPU:                              12.771s
+Total: 37.987s
 
-Total time: 37.987 seconds
+AFTER (Sparse Bounds + Native GPU):
+-----------------------------------
+Sequential CPU (sequential cells):      8.525s
+Sequential CPU (parallel cells):        2.130s
+Parallel grids CPU (sequential cells):  2.194s
+CuPy GPU:                               9.724s
+Native Mojo GPU:                        1.922s
+Total: 25.172s
 
-Notes:
-- PNG generation disabled (benchmark mode)
-- The "sequential cells" modes iterate all 20,000 columns per row
-- These are the primary targets for sparse bounds optimization
+Key Comparisons:
+- Sequential CPU: 15.3s → 8.5s (sparse bounds)
+- Parallel CPU: 4.0s → 2.1s (sparse bounds)
+- Native GPU vs CuPy: 1.9s vs 9.7s (5x faster)
+- Native GPU compute: 0.054s vs CuPy 1.98s (37x faster)
 
+Optimizations:
+1. Sparse bounds - only process expanding triangle, not full 20K width
+2. Native Mojo GPU - replaces Python/CuPy with native DeviceContext kernels
