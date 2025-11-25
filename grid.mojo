@@ -2,8 +2,25 @@ from python import Python, PythonObject
 from rule import Rule
 from algorithm import parallelize
 from sys.info import has_nvidia_gpu_accelerator
-from common import CELL_SIZE
+from sys import has_accelerator
+from common import CELL_SIZE, WIDTH, HEIGHT
 from gpu_timing_result import GPUTimingResult
+from math import ceildiv
+
+# Native GPU imports
+from gpu.host import DeviceContext
+from layout import LayoutTensor
+from gpu_kernels import (
+    cell_dtype,
+    gpu_block_size,
+    grid_size,
+    grid_layout,
+    max_patterns,
+    patterns_layout,
+    init_center_kernel,
+    automaton_grid_kernel,
+)
+
 
 struct Grid(Copyable, Movable):
     var cells: List[List[Int]]
@@ -121,6 +138,94 @@ struct Grid(Copyable, Movable):
             # CPU fallback
             for row in range(1, self.height):
                 self._apply_rule_cpu_row(row, rule)
+        
+        return GPUTimingResult(prep_duration, compute_duration, transfer_duration, total_duration, runs)
+
+    fn generate_native_gpu(mut self, rule: Rule) raises -> GPUTimingResult:
+        """Generate cellular automaton using native Mojo GPU."""
+        var py_time = Python.import_module("time")
+        var py_builtins = Python.import_module("builtins")
+        var py_operator = Python.import_module("operator")
+        var zero = py_builtins.float(0.0)
+        var prep_duration = zero
+        var compute_duration = zero
+        var transfer_duration = zero
+        var total_duration = zero
+        var runs = 0
+        
+        @parameter
+        if not has_accelerator():
+            print("No GPU accelerator, using CPU fallback")
+            self.generate_sequential_cpu(rule)
+        else:
+            var prep_start = py_time.time()
+            
+            # Build allowed patterns
+            var allowed = self._build_allowed_patterns(rule)
+            var num_patterns = len(allowed)
+            
+            # Create device context
+            var ctx = DeviceContext()
+            
+            # Allocate all buffers (host + device)
+            var host_patterns = ctx.enqueue_create_host_buffer[cell_dtype](max_patterns)
+            var dev_grid = ctx.enqueue_create_buffer[cell_dtype](grid_size)
+            var dev_patterns = ctx.enqueue_create_buffer[cell_dtype](max_patterns)
+            ctx.synchronize()  # Wait for all allocations
+            
+            # Initialize patterns on host (pad with -1 for unused slots)
+            for i in range(max_patterns):
+                if i < num_patterns:
+                    host_patterns[i] = Int32(allowed[i])
+                else:
+                    host_patterns[i] = Int32(-1)
+            
+            # Copy patterns to device
+            ctx.enqueue_copy(dev_patterns, host_patterns)
+            ctx.synchronize()  # Wait for copy before kernel launch
+            
+            # Create tensor view for the grid
+            var grid_tensor = LayoutTensor[cell_dtype, grid_layout](dev_grid)
+            
+            var prep_end = py_time.time()
+            prep_duration = py_operator.sub(prep_end, prep_start)
+            
+            var compute_start = py_time.time()
+            
+            # Calculate grid dimensions for kernel launch
+            var num_blocks = ceildiv(WIDTH, gpu_block_size)
+            var patterns_tensor = LayoutTensor[cell_dtype, patterns_layout](dev_patterns)
+            
+            # First, set the initial cell (run init kernel with 1 thread)
+            ctx.enqueue_function_checked[init_center_kernel, init_center_kernel](
+                grid_tensor,
+                grid_dim=1,
+                block_dim=1,
+            )
+            
+            # Process ALL rows without syncing - just enqueue all kernels
+            for row in range(1, HEIGHT):
+                ctx.enqueue_function_checked[automaton_grid_kernel, automaton_grid_kernel](
+                    grid_tensor,
+                    patterns_tensor,
+                    num_patterns,
+                    row,
+                    grid_dim=num_blocks,
+                    block_dim=gpu_block_size,
+                )
+            
+            # Single sync after all kernels are enqueued
+            ctx.synchronize()
+            
+            var compute_end = py_time.time()
+            compute_duration = py_operator.sub(compute_end, compute_start)
+            
+            # Note: We skip GPU→CPU transfer since we use CPU results for rendering
+            # The grid stays on GPU and is discarded (benchmark only)
+            
+            var total_end = py_time.time()
+            total_duration = py_operator.sub(total_end, prep_start)
+            runs = 1
         
         return GPUTimingResult(prep_duration, compute_duration, transfer_duration, total_duration, runs)
 
