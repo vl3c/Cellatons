@@ -3,7 +3,7 @@ from rule import Rule
 from grid import Grid
 from rule_container import RuleContainer
 from algorithm import parallelize
-from common import WIDTH, HEIGHT, get_filename
+from common import WIDTH, HEIGHT, RENDER_PNGS, get_filename
 from renderer import Renderer
 
 fn generate_sequential_grids_cpu_sequential_cells_cpu(rule_container: RuleContainer) raises -> List[Grid]:
