@@ -1,0 +1,20 @@
+---
+globs: **/*.mojo
+alwaysApply: false
+---
+# Mojo Guidelines
+
+- Docs: https://docs.modular.com/mojo/manual/
+- Use `mojo format` for consistent formatting
+- Run via: `pixi run mojo <file>.mojo`
+
+## Key Patterns
+- Use `@parameter` for compile-time parallelization closures
+- Use `parallelize[fn](count)` for CPU parallelization
+- Prefer `List[T]` over raw pointers for memory safety
+- Use `var` for mutable, omit for immutable bindings
+
+## GPU (CuPy)
+- Check `has_nvidia_gpu_accelerator()` before GPU paths
+- Use `cp.asarray()` for host-to-device transfers
+- Vectorized array ops (roll, isin) are faster than loops
