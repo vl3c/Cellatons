@@ -5,10 +5,13 @@ from elementary.rule_container import RuleContainer
 from algorithm import parallelize
 from shared.common import WIDTH, HEIGHT, RENDER_PNGS
 from shared.benchmark import BenchmarkSuite
+from shared.logger import Logger
 from elementary.renderer import Renderer
 
 
 fn main() raises:
+    var logger = Logger()  # Create logger at start - all timestamps relative to this
+    
     var py_time = Python.import_module("time")
     var py_builtins = Python.import_module("builtins")
     var py_operator = Python.import_module("operator")
@@ -21,7 +24,7 @@ fn main() raises:
     var grids1 = List[Grid]()
     var start1 = py_time.time()
     for rule in rule_container.rules:
-        var grid = Grid(WIDTH, HEIGHT)
+        var grid = Grid(WIDTH, HEIGHT, logger)
         grid.generate_sequential_cpu(rule)
         grids1.append(grid^)
     bench.add("CPU seq/seq", py_time.time() - start1)
@@ -30,7 +33,7 @@ fn main() raises:
     var grids2 = List[Grid]()
     var start2 = py_time.time()
     for rule in rule_container.rules:
-        var grid = Grid(WIDTH, HEIGHT)
+        var grid = Grid(WIDTH, HEIGHT, logger)
         grid.generate_parallel_cpu(rule)
         grids2.append(grid^)
     bench.add("CPU seq/par", py_time.time() - start2)
@@ -38,7 +41,7 @@ fn main() raises:
     # 3. CPU parallel/sequential
     var grids3 = List[Grid]()
     for _ in range(num_rules):
-        grids3.append(Grid(WIDTH, HEIGHT))
+        grids3.append(Grid(WIDTH, HEIGHT, logger))
     var start3 = py_time.time()
     @parameter
     fn gen3(i: Int):
@@ -51,7 +54,7 @@ fn main() raises:
     var g4 = py_builtins.float(0.0)
     var start4 = py_time.time()
     for rule in rule_container.rules:
-        var grid = Grid(WIDTH, HEIGHT)
+        var grid = Grid(WIDTH, HEIGHT, logger)
         var stats = grid.generate_parallel_cells_cupy_gpu(rule)
         g4 = py_operator.add(g4, stats.total)
         grids4.append(grid^)
@@ -62,7 +65,7 @@ fn main() raises:
     var g5 = py_builtins.float(0.0)
     var start5 = py_time.time()
     for rule in rule_container.rules:
-        var grid = Grid(WIDTH, HEIGHT)
+        var grid = Grid(WIDTH, HEIGHT, logger)
         var stats = grid.generate_native_gpu(rule)
         g5 = py_operator.add(g5, stats.total)
         grids5.append(grid^)
@@ -72,7 +75,7 @@ fn main() raises:
     var g6 = py_builtins.float(0.0)
     var start6 = py_time.time()
     for rule in rule_container.rules:
-        var stats = Grid.benchmark_native_gpu(rule)
+        var stats = Grid.benchmark_native_gpu(rule, logger)
         g6 = py_operator.add(g6, stats.total)
     bench.add_gpu("Native GPU (no CPU alloc)", py_time.time() - start6, g6)
     
