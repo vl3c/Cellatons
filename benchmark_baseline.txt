@@ -30,3 +30,25 @@ Key Comparisons:
 Optimizations:
 1. Sparse bounds - only process expanding triangle, not full 20K width
 2. Native Mojo GPU - replaces Python/CuPy with native DeviceContext kernels
+
+LATEST (Logger + GPU-only benchmark):
+-------------------------------------
+Date: 2025-12-01
+Grid: 20,000 x 10,000 (200M cells) | 3 rules
+Memory: RAM 1.4 GB | VRAM 762 MB
+
+Method                       Total       GPU
+-----------------------------------------------
+CPU seq/seq                   8.758s       -
+CPU seq/par                   2.171s       -
+CPU par/seq                   2.166s       -
+CuPy GPU                      9.309s    5.722s
+Native GPU                    0.960s    0.629s
+Native GPU (no CPU alloc)     0.179s    0.179s
+-----------------------------------------------
+Total:                       24.018s
+
+Key Insights:
+- Native GPU (no CPU alloc) is 5.4x faster than Native GPU with CPU grid
+- Native GPU is 9.7x faster than CuPy GPU
+- Pure GPU compute time: 0.179s for 200M cells (1.1 billion cells/sec)
