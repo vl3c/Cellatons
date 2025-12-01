@@ -8,17 +8,19 @@ from shared.gpu_timing_result import GPUTimingResult
 from math import ceildiv
 
 # Native GPU imports
-from gpu.host import DeviceContext
+from gpu.host import DeviceContext, HostBuffer
 from layout import LayoutTensor
 from elementary.gpu_kernels import (
     cell_dtype,
     gpu_block_size,
     grid_size,
     grid_layout,
+    row_layout,
     max_patterns,
     patterns_layout,
     init_center_kernel,
     automaton_grid_kernel,
+    automaton_row_kernel,
 )
 
 
@@ -142,7 +144,11 @@ struct Grid(Copyable, Movable):
         return GPUTimingResult(prep_duration, compute_duration, transfer_duration, total_duration, runs)
 
     fn generate_native_gpu(mut self, rule: Rule) raises -> GPUTimingResult:
-        """Generate cellular automaton using native Mojo GPU."""
+        """Generate cellular automaton using native Mojo GPU.
+        
+        Attempts full-grid mode first (faster). If GPU memory allocation fails,
+        automatically falls back to ping-pong mode (slower but memory-efficient).
+        """
         var py_time = Python.import_module("time")
         var py_builtins = Python.import_module("builtins")
         var py_operator = Python.import_module("operator")
@@ -157,75 +163,215 @@ struct Grid(Copyable, Movable):
         if not has_accelerator():
             print("No GPU accelerator, using CPU fallback")
             self.generate_sequential_cpu(rule)
-        else:
-            var prep_start = py_time.time()
-            
-            # Build allowed patterns
-            var allowed = self._build_allowed_patterns(rule)
-            
-            # Create device context
-            var ctx = DeviceContext()
-            
-            # Allocate all buffers (host + device)
-            var host_patterns = ctx.enqueue_create_host_buffer[cell_dtype](max_patterns)
-            var dev_grid = ctx.enqueue_create_buffer[cell_dtype](grid_size)
-            var dev_patterns = ctx.enqueue_create_buffer[cell_dtype](max_patterns)
-            ctx.synchronize()  # Wait for all allocations
-            
-            # Initialize patterns on host (pad with -1 for unused slots)
-            for i in range(max_patterns):
-                if i < len(allowed):
-                    host_patterns[i] = Int32(allowed[i])
-                else:
-                    host_patterns[i] = Int32(-1)
-            
-            # Copy patterns to device
-            ctx.enqueue_copy(dev_patterns, host_patterns)
-            ctx.synchronize()  # Wait for copy before kernel launch
-            
-            # Create tensor view for the grid
-            var grid_tensor = LayoutTensor[cell_dtype, grid_layout](dev_grid)
-            
-            var prep_end = py_time.time()
-            prep_duration = py_operator.sub(prep_end, prep_start)
-            
-            var compute_start = py_time.time()
-            
-            # Calculate grid dimensions for kernel launch
-            var num_blocks = ceildiv(WIDTH, gpu_block_size)
-            var patterns_tensor = LayoutTensor[cell_dtype, patterns_layout](dev_patterns)
-            
-            # First, set the initial cell (run init kernel with 1 thread)
-            ctx.enqueue_function_checked[init_center_kernel, init_center_kernel](
-                grid_tensor,
-                grid_dim=1,
-                block_dim=1,
+            return GPUTimingResult(prep_duration, compute_duration, transfer_duration, total_duration, runs)
+        
+        # Try full-grid mode first
+        try:
+            return self._generate_native_gpu_full_grid(
+                rule, py_time, py_builtins, py_operator
             )
-            
-            # Process ALL rows without syncing - just enqueue all kernels
-            for row in range(1, HEIGHT):
-                ctx.enqueue_function_checked[automaton_grid_kernel, automaton_grid_kernel](
-                    grid_tensor,
+        except:
+            # Full grid allocation failed, fall back to ping-pong mode
+            print("GPU memory insufficient for full grid, using ping-pong mode")
+            return self._generate_native_gpu_pingpong(
+                rule, py_time, py_builtins, py_operator
+            )
+
+    fn _generate_native_gpu_full_grid(
+        mut self,
+        rule: Rule,
+        py_time: PythonObject,
+        py_builtins: PythonObject,
+        py_operator: PythonObject,
+    ) raises -> GPUTimingResult:
+        """Generate cellular automaton using full-grid GPU mode (fast).
+        
+        Allocates the entire grid on GPU, processes all rows, then optionally
+        transfers back to CPU. Fastest mode but requires grid_size * 4 bytes of VRAM.
+        """
+        var transfer_duration = py_builtins.float(0.0)  # No transfer in full-grid benchmark mode
+        
+        var prep_start = py_time.time()
+        
+        # Build allowed patterns
+        var allowed = self._build_allowed_patterns(rule)
+        
+        # Create device context
+        var ctx = DeviceContext()
+        
+        # Allocate all buffers (host + device)
+        # This may throw if GPU memory is insufficient
+        var host_patterns = ctx.enqueue_create_host_buffer[cell_dtype](max_patterns)
+        var dev_grid = ctx.enqueue_create_buffer[cell_dtype](grid_size)
+        var dev_patterns = ctx.enqueue_create_buffer[cell_dtype](max_patterns)
+        ctx.synchronize()  # Wait for all allocations
+        
+        # Initialize patterns on host (pad with -1 for unused slots)
+        Self._init_patterns_buffer(host_patterns, allowed)
+        
+        # Copy patterns to device
+        ctx.enqueue_copy(dev_patterns, host_patterns)
+        ctx.synchronize()  # Wait for copy before kernel launch
+        
+        # Create tensor view for the grid
+        var grid_tensor = LayoutTensor[cell_dtype, grid_layout](dev_grid)
+        
+        var prep_end = py_time.time()
+        var prep_duration = py_operator.sub(prep_end, prep_start)
+        
+        var compute_start = py_time.time()
+        
+        # Calculate grid dimensions for kernel launch
+        var num_blocks = Self._get_num_blocks()
+        var patterns_tensor = LayoutTensor[cell_dtype, patterns_layout](dev_patterns)
+        
+        # First, set the initial cell (run init kernel with 1 thread)
+        ctx.enqueue_function_checked[init_center_kernel, init_center_kernel](
+            grid_tensor,
+            grid_dim=1,
+            block_dim=1,
+        )
+        
+        # Process ALL rows without syncing - just enqueue all kernels
+        for row in range(1, HEIGHT):
+            ctx.enqueue_function_checked[automaton_grid_kernel, automaton_grid_kernel](
+                grid_tensor,
+                patterns_tensor,
+                row,
+                grid_dim=num_blocks,
+                block_dim=gpu_block_size,
+            )
+        
+        # Single sync after all kernels are enqueued
+        ctx.synchronize()
+        
+        var compute_end = py_time.time()
+        var compute_duration = py_operator.sub(compute_end, compute_start)
+        
+        # Note: We skip GPU→CPU transfer since we use CPU results for rendering
+        # The grid stays on GPU and is discarded (benchmark only)
+        
+        var total_end = py_time.time()
+        var total_duration = py_operator.sub(total_end, prep_start)
+        
+        return GPUTimingResult(prep_duration, compute_duration, transfer_duration, total_duration, 1)
+
+    fn _generate_native_gpu_pingpong(
+        mut self,
+        rule: Rule,
+        py_time: PythonObject,
+        py_builtins: PythonObject,
+        py_operator: PythonObject,
+    ) raises -> GPUTimingResult:
+        """Generate cellular automaton using ping-pong GPU mode (memory-efficient).
+        
+        Uses only 2 row buffers on GPU, transferring each computed row back to CPU.
+        Slower due to per-row transfers, but works when full grid doesn't fit in VRAM.
+        """
+        var prep_start = py_time.time()
+        
+        # Build allowed patterns
+        var allowed = self._build_allowed_patterns(rule)
+        
+        # Create device context
+        var ctx = DeviceContext()
+        
+        # Allocate ping-pong row buffers on GPU (only 2 rows!)
+        var dev_row_a = ctx.enqueue_create_buffer[cell_dtype](WIDTH)
+        var dev_row_b = ctx.enqueue_create_buffer[cell_dtype](WIDTH)
+        var dev_patterns = ctx.enqueue_create_buffer[cell_dtype](max_patterns)
+        
+        # Host buffers for initialization and transfer
+        var host_row = ctx.enqueue_create_host_buffer[cell_dtype](WIDTH)
+        var host_patterns = ctx.enqueue_create_host_buffer[cell_dtype](max_patterns)
+        ctx.synchronize()
+        
+        # Initialize patterns on host (pad with -1 for unused slots)
+        Self._init_patterns_buffer(host_patterns, allowed)
+        
+        # Initialize first row on host (center cell = 1)
+        for i in range(WIDTH):
+            host_row[i] = Int32(0)
+        host_row[WIDTH // 2] = Int32(1)
+        
+        # Copy to device
+        ctx.enqueue_copy(dev_patterns, host_patterns)
+        ctx.enqueue_copy(dev_row_a, host_row)
+        ctx.synchronize()
+        
+        # Store first row in CPU grid
+        self.cells[0][WIDTH // 2] = 1
+        
+        # Create tensor views
+        var row_a_tensor = LayoutTensor[cell_dtype, row_layout](dev_row_a)
+        var row_b_tensor = LayoutTensor[cell_dtype, row_layout](dev_row_b)
+        var patterns_tensor = LayoutTensor[cell_dtype, patterns_layout](dev_patterns)
+        
+        var prep_end = py_time.time()
+        var prep_duration = py_operator.sub(prep_end, prep_start)
+        
+        var compute_start = py_time.time()
+        
+        # Calculate kernel launch dimensions
+        var num_blocks = Self._get_num_blocks()
+        
+        # Process rows with ping-pong pattern
+        for row in range(1, HEIGHT):
+            if row % 2 == 1:
+                # Odd rows: A -> B
+                ctx.enqueue_function_checked[automaton_row_kernel, automaton_row_kernel](
+                    row_a_tensor,
+                    row_b_tensor,
                     patterns_tensor,
-                    row,
                     grid_dim=num_blocks,
                     block_dim=gpu_block_size,
                 )
+                ctx.synchronize()
+                
+                # Copy row B to host
+                ctx.enqueue_copy(host_row, dev_row_b)
+                ctx.synchronize()
+            else:
+                # Even rows: B -> A
+                ctx.enqueue_function_checked[automaton_row_kernel, automaton_row_kernel](
+                    row_b_tensor,
+                    row_a_tensor,
+                    patterns_tensor,
+                    grid_dim=num_blocks,
+                    block_dim=gpu_block_size,
+                )
+                ctx.synchronize()
+                
+                # Copy row A to host
+                ctx.enqueue_copy(host_row, dev_row_a)
+                ctx.synchronize()
             
-            # Single sync after all kernels are enqueued
-            ctx.synchronize()
-            
-            var compute_end = py_time.time()
-            compute_duration = py_operator.sub(compute_end, compute_start)
-            
-            # Note: We skip GPU→CPU transfer since we use CPU results for rendering
-            # The grid stays on GPU and is discarded (benchmark only)
-            
-            var total_end = py_time.time()
-            total_duration = py_operator.sub(total_end, prep_start)
-            runs = 1
+            # Transfer from host buffer to CPU grid
+            for col in range(WIDTH):
+                self.cells[row][col] = Int(host_row[col])
         
-        return GPUTimingResult(prep_duration, compute_duration, transfer_duration, total_duration, runs)
+        var compute_end = py_time.time()
+        var compute_duration = py_operator.sub(compute_end, compute_start)
+        var transfer_duration = compute_duration  # In ping-pong, compute and transfer are interleaved
+        
+        var total_end = py_time.time()
+        var total_duration = py_operator.sub(total_end, prep_start)
+        
+        return GPUTimingResult(prep_duration, compute_duration, transfer_duration, total_duration, 1)
+
+    @staticmethod
+    fn _get_num_blocks() -> Int:
+        """Calculate number of GPU blocks needed to cover WIDTH columns."""
+        return ceildiv(WIDTH, gpu_block_size)
+
+    @staticmethod
+    fn _init_patterns_buffer(mut host_patterns: HostBuffer[cell_dtype], allowed: List[Int]):
+        """Initialize patterns host buffer with allowed patterns, padding unused slots with -1."""
+        for i in range(max_patterns):
+            if i < len(allowed):
+                host_patterns[i] = Int32(allowed[i])
+            else:
+                host_patterns[i] = Int32(-1)
 
     fn _apply_rule_cpu_row(mut self, row: Int, rule: Rule):
         for col in range(1, self.width - 1):
