@@ -176,3 +176,61 @@ Why CPU beats GPU:
 2. AVX-512 processes 64 cells per instruction
 3. Zero memory transfer overhead (GPU requires PCIe transfers)
 4. Cache-friendly sequential access pattern
+
+================================================================================
+OPTIMIZATION JOURNEY: 15.335s → 0.011s (1,394x speedup!)
+================================================================================
+
+Original naive implementation:     15.335s
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────┐
+│ 1. Sparse Bounds (inverted pyramid)                     │
+│    Only process expanding triangle, not full 20K width  │
+│    15.335s → 8.525s (1.8x)                              │
+└─────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────┐
+│ 2. O(1) Bitmask Rule Lookup                             │
+│    (mask >> code) & 1 instead of string matching        │
+│    8.525s → 3.375s (2.5x)                               │
+└─────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────┐
+│ 3. Parallel Grids                                       │
+│    Process all 3 rules simultaneously                   │
+│    3.375s → 0.127s (27x)                                │
+└─────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────┐
+│ 4. AVX-512 SIMD                                         │
+│    64 cells per instruction with parallel bitmask       │
+│    0.127s → 0.016s (8x)                                 │
+└─────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────┐
+│ 5. Flat Buffer (eliminate sync overhead)                │
+│    List[UInt8] instead of List[List[Int]]               │
+│    0.016s → 0.011s (1.5x)                               │
+└─────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+                              Final: 0.011s
+
+The Math:
+- 200 million cells in 0.011 seconds
+- = 18.2 billion cells/second
+- = 64 cells per AVX-512 instruction
+- = 284 million SIMD instructions/second
+
+What Made It Possible:
+1. 9800X3D's 96MB 3D V-Cache - entire working set fits in L3 cache
+2. AVX-512 - 64 cells processed per CPU instruction
+3. Mojo's zero-cost abstractions - no runtime overhead
+4. Algorithmic insight - sparse bounds + O(1) lookup
+
+CPU now beats RTX 4070 GPU by 17x for this workload!
