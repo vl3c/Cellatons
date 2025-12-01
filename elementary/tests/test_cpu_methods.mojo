@@ -7,6 +7,7 @@ from testing import assert_true, assert_equal, assert_false
 from elementary.grid import Grid
 from elementary.rule import Rule
 from shared.common import WIDTH, HEIGHT
+from shared.logger import Logger
 
 
 fn create_rule_110() -> Rule:
@@ -43,16 +44,18 @@ fn grids_equal(grid1: Grid, grid2: Grid) -> Bool:
 
 fn test_sequential_cpu_center_initialized() raises:
     """Test that sequential CPU initializes center cell."""
+    var logger = Logger()
     var rule = create_rule_110()
-    var grid = Grid(WIDTH, HEIGHT)
+    var grid = Grid(WIDTH, HEIGHT, logger)
     grid.generate_sequential_cpu(rule)
     assert_equal(grid.cells[0][WIDTH // 2], 1)
 
 
 fn test_sequential_cpu_edges_zero() raises:
     """Test that sequential CPU keeps edge cells as zero."""
+    var logger = Logger()
     var rule = create_rule_110()
-    var grid = Grid(WIDTH, HEIGHT)
+    var grid = Grid(WIDTH, HEIGHT, logger)
     grid.generate_sequential_cpu(rule)
     
     for row in range(min(100, HEIGHT)):
@@ -66,16 +69,18 @@ fn test_sequential_cpu_edges_zero() raises:
 
 fn test_parallel_cpu_center_initialized() raises:
     """Test that parallel CPU initializes center cell."""
+    var logger = Logger()
     var rule = create_rule_110()
-    var grid = Grid(WIDTH, HEIGHT)
+    var grid = Grid(WIDTH, HEIGHT, logger)
     grid.generate_parallel_cpu(rule)
     assert_equal(grid.cells[0][WIDTH // 2], 1)
 
 
 fn test_parallel_cpu_edges_zero() raises:
     """Test that parallel CPU keeps edge cells as zero."""
+    var logger = Logger()
     var rule = create_rule_110()
-    var grid = Grid(WIDTH, HEIGHT)
+    var grid = Grid(WIDTH, HEIGHT, logger)
     grid.generate_parallel_cpu(rule)
     
     for row in range(min(100, HEIGHT)):
@@ -89,12 +94,13 @@ fn test_parallel_cpu_edges_zero() raises:
 
 fn test_sequential_parallel_produce_identical_results() raises:
     """Test that sequential and parallel CPU produce identical results."""
+    var logger = Logger()
     var rule = create_rule_110()
     
-    var grid_seq = Grid(WIDTH, HEIGHT)
+    var grid_seq = Grid(WIDTH, HEIGHT, logger)
     grid_seq.generate_sequential_cpu(rule)
     
-    var grid_par = Grid(WIDTH, HEIGHT)
+    var grid_par = Grid(WIDTH, HEIGHT, logger)
     grid_par.generate_parallel_cpu(rule)
     
     assert_true(grids_equal(grid_seq, grid_par), "Sequential and parallel should produce identical results")

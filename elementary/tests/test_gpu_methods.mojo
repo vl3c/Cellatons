@@ -7,6 +7,7 @@ from testing import assert_true, assert_equal, assert_false
 from elementary.grid import Grid
 from elementary.rule import Rule
 from shared.common import WIDTH, HEIGHT
+from shared.logger import Logger
 from sys import has_accelerator
 from sys.info import has_nvidia_gpu_accelerator
 
@@ -39,8 +40,9 @@ fn test_native_gpu_executes_successfully() raises:
         print("Skipping: no GPU accelerator available")
         return
     
+    var logger = Logger()
     var rule = create_rule_110()
-    var grid = Grid(WIDTH, HEIGHT)
+    var grid = Grid(WIDTH, HEIGHT, logger)
     var timing = grid.generate_native_gpu(rule)
     assert_true(timing.runs > 0, "Native GPU should execute successfully")
 
@@ -55,8 +57,9 @@ fn test_cupy_gpu_executes_successfully() raises:
         print("Skipping: no NVIDIA GPU available")
         return
     
+    var logger = Logger()
     var rule = create_rule_110()
-    var grid = Grid(WIDTH, HEIGHT)
+    var grid = Grid(WIDTH, HEIGHT, logger)
     var timing = grid.generate_parallel_cells_cupy_gpu(rule)
     assert_true(timing.runs > 0, "CuPy GPU should execute successfully")
 

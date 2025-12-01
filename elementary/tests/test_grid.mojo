@@ -7,6 +7,7 @@ from testing import assert_true, assert_equal, assert_false
 from elementary.grid import Grid
 from elementary.rule import Rule
 from shared.common import WIDTH, HEIGHT
+from shared.logger import Logger
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -15,14 +16,16 @@ from shared.common import WIDTH, HEIGHT
 
 fn test_grid_dimensions() raises:
     """Test that grid dimensions match constants."""
-    var grid = Grid(WIDTH, HEIGHT)
+    var logger = Logger()
+    var grid = Grid(WIDTH, HEIGHT, logger)
     assert_equal(grid.get_width(), WIDTH)
     assert_equal(grid.get_height(), HEIGHT)
 
 
 fn test_grid_initialized_with_zeros() raises:
     """Test that new grid is initialized with all zeros."""
-    var grid = Grid(WIDTH, HEIGHT)
+    var logger = Logger()
+    var grid = Grid(WIDTH, HEIGHT, logger)
     var all_zeros = True
     for row in range(min(100, HEIGHT)):
         for col in range(min(100, WIDTH)):
@@ -34,7 +37,8 @@ fn test_grid_initialized_with_zeros() raises:
 
 fn test_set_get_cell() raises:
     """Test set_cell and get_cell methods."""
-    var grid = Grid(WIDTH, HEIGHT)
+    var logger = Logger()
+    var grid = Grid(WIDTH, HEIGHT, logger)
     grid.set_cell(0, 50, 1)
     assert_equal(grid.get_cell(0, 50), 1)
     
