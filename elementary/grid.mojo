@@ -5,6 +5,7 @@ from sys.info import has_nvidia_gpu_accelerator
 from sys import has_accelerator
 from shared.common import CELL_SIZE, WIDTH, HEIGHT
 from shared.gpu_timing_result import GPUTimingResult
+from shared.logger import debug_log, debug_log_int
 from math import ceildiv
 
 # Native GPU imports
@@ -68,6 +69,7 @@ struct Grid(Copyable, Movable):
         return self.height
     
     fn generate_parallel_cpu(mut self, rule: Rule):
+        debug_log("Entering generate_parallel_cpu")
         var center = self.width // 2
         self.cells[0][center] = 1
         
@@ -90,8 +92,10 @@ struct Grid(Copyable, Movable):
                 self.cells[row][col] = rule.apply(left, center_val, right)
             
             parallelize[compute_cell](bound_width)
+        debug_log("Completed generate_parallel_cpu")
     
     fn generate_sequential_cpu(mut self, rule: Rule):
+        debug_log("Entering generate_sequential_cpu")
         var center = self.width // 2
         self.cells[0][center] = 1
         
@@ -103,8 +107,10 @@ struct Grid(Copyable, Movable):
             left_bound = left_bound - 1 if left_bound > 1 else 1
             right_bound = right_bound + 1 if right_bound < self.width - 2 else self.width - 2
             self._apply_rule_cpu_row_bounded(row, rule, left_bound, right_bound)
+        debug_log("Completed generate_sequential_cpu")
 
     fn generate_parallel_cells_cupy_gpu(mut self, rule: Rule) raises -> GPUTimingResult:
+        debug_log("Entering generate_parallel_cells_cupy_gpu")
         # Set initial cell in the middle of the first row
         self.cells[0][self.width // 2] = 1
         
@@ -119,23 +125,29 @@ struct Grid(Copyable, Movable):
         var runs = 0
         # Check if NVIDIA GPU is available
         if has_nvidia_gpu_accelerator():
+            debug_log("NVIDIA GPU detected, using CuPy")
             var cp = Python.import_module("cupy")
             
             var prep_start = py_time.time()
+            debug_log("Initializing CuPy GPU grid")
             var grid_gpu = self._init_gpu_grid(cp, py_builder, py_operator)
+            debug_log("Creating allowed patterns array")
             var allowed_array = self._create_allowed_patterns_array(rule, cp, py_builder)
             var prep_end = py_time.time()
             prep_duration = py_operator.sub(prep_end, prep_start)
             
             var compute_start = py_time.time()
+            debug_log("Starting CuPy row computation")
             self._compute_rows_on_gpu(grid_gpu, allowed_array, cp, py_operator)
             var compute_end = py_time.time()
             compute_duration = py_operator.sub(compute_end, compute_start)
+            debug_log("CuPy computation complete")
             
             var total_end = py_time.time()
             total_duration = py_operator.sub(total_end, prep_start)
             runs = 1
         else:
+            debug_log("No NVIDIA GPU detected, falling back to CPU")
             print("No NVIDIA GPU detected, using CPU fallback")
             # CPU fallback
             for row in range(1, self.height):
@@ -161,17 +173,22 @@ struct Grid(Copyable, Movable):
         
         @parameter
         if not has_accelerator():
+            debug_log("No GPU accelerator detected")
             print("No GPU accelerator, using CPU fallback")
             self.generate_sequential_cpu(rule)
             return GPUTimingResult(prep_duration, compute_duration, transfer_duration, total_duration, runs)
         
+        debug_log("GPU accelerator available, attempting full-grid mode")
+        
         # Try full-grid mode first
         try:
+            debug_log("Entering full-grid GPU path")
             return self._generate_native_gpu_full_grid(
                 rule, py_time, py_builtins, py_operator
             )
         except:
             # Full grid allocation failed, fall back to ping-pong mode
+            debug_log("Full-grid allocation failed, falling back to ping-pong mode")
             print("GPU memory insufficient for full grid, using ping-pong mode")
             return self._generate_native_gpu_pingpong(
                 rule, py_time, py_builtins, py_operator
@@ -195,16 +212,23 @@ struct Grid(Copyable, Movable):
         
         # Build allowed patterns
         var allowed = self._build_allowed_patterns(rule)
+        debug_log_int("Built allowed patterns, count:", len(allowed))
         
         # Create device context
+        debug_log("Creating GPU device context")
         var ctx = DeviceContext()
         
         # Allocate all buffers (host + device)
         # This may throw if GPU memory is insufficient
+        debug_log_int("Allocating host patterns buffer, size:", max_patterns)
         var host_patterns = ctx.enqueue_create_host_buffer[cell_dtype](max_patterns)
+        debug_log_int("Allocating device grid buffer, size:", grid_size)
         var dev_grid = ctx.enqueue_create_buffer[cell_dtype](grid_size)
+        debug_log_int("Allocating device patterns buffer, size:", max_patterns)
         var dev_patterns = ctx.enqueue_create_buffer[cell_dtype](max_patterns)
+        debug_log("Synchronizing allocations")
         ctx.synchronize()  # Wait for all allocations
+        debug_log("All GPU allocations successful")
         
         # Initialize patterns on host (pad with -1 for unused slots)
         Self._init_patterns_buffer(host_patterns, allowed)
@@ -268,23 +292,32 @@ struct Grid(Copyable, Movable):
         Uses only 2 row buffers on GPU, transferring each computed row back to CPU.
         Slower due to per-row transfers, but works when full grid doesn't fit in VRAM.
         """
+        debug_log("Entering ping-pong GPU mode")
         var prep_start = py_time.time()
         
         # Build allowed patterns
         var allowed = self._build_allowed_patterns(rule)
+        debug_log_int("Built allowed patterns, count:", len(allowed))
         
         # Create device context
+        debug_log("Creating GPU device context for ping-pong")
         var ctx = DeviceContext()
         
         # Allocate ping-pong row buffers on GPU (only 2 rows!)
+        debug_log_int("Allocating ping-pong row buffer A, size:", WIDTH)
         var dev_row_a = ctx.enqueue_create_buffer[cell_dtype](WIDTH)
+        debug_log_int("Allocating ping-pong row buffer B, size:", WIDTH)
         var dev_row_b = ctx.enqueue_create_buffer[cell_dtype](WIDTH)
+        debug_log_int("Allocating device patterns buffer, size:", max_patterns)
         var dev_patterns = ctx.enqueue_create_buffer[cell_dtype](max_patterns)
         
         # Host buffers for initialization and transfer
+        debug_log("Allocating host buffers for transfer")
         var host_row = ctx.enqueue_create_host_buffer[cell_dtype](WIDTH)
         var host_patterns = ctx.enqueue_create_host_buffer[cell_dtype](max_patterns)
+        debug_log("Synchronizing allocations")
         ctx.synchronize()
+        debug_log("Ping-pong allocations successful")
         
         # Initialize patterns on host (pad with -1 for unused slots)
         Self._init_patterns_buffer(host_patterns, allowed)
@@ -316,7 +349,11 @@ struct Grid(Copyable, Movable):
         var num_blocks = Self._get_num_blocks()
         
         # Process rows with ping-pong pattern
+        debug_log_int("Starting ping-pong processing, total rows:", HEIGHT - 1)
         for row in range(1, HEIGHT):
+            # Log first few iterations for debugging
+            if row <= 3:
+                debug_log_int("Processing ping-pong row:", row)
             if row % 2 == 1:
                 # Odd rows: A -> B
                 ctx.enqueue_function_checked[automaton_row_kernel, automaton_row_kernel](
@@ -357,6 +394,7 @@ struct Grid(Copyable, Movable):
         var total_end = py_time.time()
         var total_duration = py_operator.sub(total_end, prep_start)
         
+        debug_log("Ping-pong processing complete")
         return GPUTimingResult(prep_duration, compute_duration, transfer_duration, total_duration, 1)
 
     @staticmethod

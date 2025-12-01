@@ -3,7 +3,8 @@ from python import Python
 alias WIDTH: Int = 20_000
 alias HEIGHT: Int = 10_000
 alias CELL_SIZE: Int = 2
-alias RENDER_PNGS: Bool = True
+alias RENDER_PNGS: Bool = False
+alias DEBUG: Bool = False
 
 fn get_filename(output_name: String) -> String:
     var filename = String("generated/")
