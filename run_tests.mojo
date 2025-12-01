@@ -2,66 +2,15 @@
 
 Run with: pixi run mojo run_tests.mojo
 
-Test documentation is in elementary/tests/*.mojo files.
+Uses TestSuite for automatic test discovery and execution.
 """
 
-from testing import assert_true, assert_equal, assert_false
+from testing import TestSuite, assert_true, assert_equal, assert_false
 from elementary.grid import Grid
 from elementary.rule import Rule
 from shared.common import WIDTH, HEIGHT
 from sys import has_accelerator
 from sys.info import has_nvidia_gpu_accelerator
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# TEST INFRASTRUCTURE
-# ═══════════════════════════════════════════════════════════════════════════════
-
-struct TestStats:
-    """Track test execution statistics."""
-    var tests_run: Int
-    var tests_passed: Int
-    var tests_failed: Int
-    
-    fn __init__(out self):
-        self.tests_run = 0
-        self.tests_passed = 0
-        self.tests_failed = 0
-
-
-fn run_test(mut stats: TestStats, test_name: String, test_fn: fn() raises -> None):
-    """Run a single test and track results."""
-    stats.tests_run += 1
-    try:
-        test_fn()
-        stats.tests_passed += 1
-        print("  PASS:", test_name)
-    except:
-        stats.tests_failed += 1
-        print("  FAIL:", test_name)
-
-
-fn print_section(name: String):
-    """Print a section header."""
-    print("\n" + "=" * 60)
-    print(name)
-    print("=" * 60)
-
-
-fn print_summary(stats: TestStats):
-    """Print test summary."""
-    print("\n" + "=" * 60)
-    print("TEST SUMMARY")
-    print("=" * 60)
-    print("Tests run:", stats.tests_run)
-    print("Tests passed:", stats.tests_passed)
-    print("Tests failed:", stats.tests_failed)
-    
-    if stats.tests_failed == 0:
-        print("\nALL TESTS PASSED!")
-    else:
-        print("\nSOME TESTS FAILED!")
-    print("=" * 60)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -111,7 +60,7 @@ fn grids_equal(grid1: Grid, grid2: Grid) -> Bool:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TESTS: Grid (see elementary/tests/test_grid.mojo)
+# TESTS: Grid
 # ═══════════════════════════════════════════════════════════════════════════════
 
 fn test_grid_dimensions() raises:
@@ -134,7 +83,7 @@ fn test_set_get_cell() raises:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TESTS: CPU Methods (see elementary/tests/test_cpu_methods.mojo)
+# TESTS: CPU Methods
 # ═══════════════════════════════════════════════════════════════════════════════
 
 fn test_sequential_cpu_center_initialized() raises:
@@ -170,7 +119,7 @@ fn test_sequential_parallel_identical() raises:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TESTS: GPU Methods (see elementary/tests/test_gpu_methods.mojo)
+# TESTS: GPU Methods
 # ═══════════════════════════════════════════════════════════════════════════════
 
 fn test_native_gpu_executes() raises:
@@ -193,7 +142,7 @@ fn test_cupy_gpu_executes() raises:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TESTS: Rules (see elementary/tests/test_rules.mojo)
+# TESTS: Rules
 # ═══════════════════════════════════════════════════════════════════════════════
 
 fn test_rule30_patterns() raises:
@@ -221,7 +170,7 @@ fn test_rule110_patterns() raises:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TESTS: Edge Cases (see elementary/tests/test_edge_cases.mojo)
+# TESTS: Edge Cases
 # ═══════════════════════════════════════════════════════════════════════════════
 
 fn test_empty_rule() raises:
@@ -264,40 +213,14 @@ fn test_all_edges_zero() raises:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# MAIN TEST RUNNER
+# MAIN - Auto-discover and run all tests
 # ═══════════════════════════════════════════════════════════════════════════════
 
-fn main() raises:
+def main():
     print("=" * 60)
     print("ELEMENTARY CELLULAR AUTOMATON TEST SUITE")
     print("=" * 60)
     print("Grid dimensions:", WIDTH, "x", HEIGHT)
+    print()
     
-    var stats = TestStats()
-    
-    print_section("Grid Tests")
-    run_test(stats, "test_grid_dimensions", test_grid_dimensions)
-    run_test(stats, "test_grid_initialized_with_zeros", test_grid_initialized_with_zeros)
-    run_test(stats, "test_set_get_cell", test_set_get_cell)
-    
-    print_section("CPU Method Tests")
-    run_test(stats, "test_sequential_cpu_center_initialized", test_sequential_cpu_center_initialized)
-    run_test(stats, "test_sequential_cpu_edges_zero", test_sequential_cpu_edges_zero)
-    run_test(stats, "test_parallel_cpu_center_initialized", test_parallel_cpu_center_initialized)
-    run_test(stats, "test_sequential_parallel_identical", test_sequential_parallel_identical)
-    
-    print_section("GPU Method Tests")
-    run_test(stats, "test_native_gpu_executes", test_native_gpu_executes)
-    run_test(stats, "test_cupy_gpu_executes", test_cupy_gpu_executes)
-    
-    print_section("Rule Tests")
-    run_test(stats, "test_rule30_patterns", test_rule30_patterns)
-    run_test(stats, "test_rule110_patterns", test_rule110_patterns)
-    
-    print_section("Edge Case Tests")
-    run_test(stats, "test_empty_rule", test_empty_rule)
-    run_test(stats, "test_all_patterns_rule", test_all_patterns_rule)
-    run_test(stats, "test_all_edges_zero", test_all_edges_zero)
-    
-    print_summary(stats)
-
+    TestSuite.discover_tests[__functions_in_module()]().run()
