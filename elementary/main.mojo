@@ -155,11 +155,15 @@ fn generate_sequential_grids_native_gpu(rule_container: RuleContainer) raises ->
     return grids^
 
 fn main() raises:
+    print("[DEBUG] main() starting")
     var py_time = Python.import_module("time")
     var py_builtins = Python.import_module("builtins")
+    print("[DEBUG] Python modules imported")
     
     var total_start = py_time.time()
+    print("[DEBUG] Creating RuleContainer...")
     var rule_container = RuleContainer()
+    print("[DEBUG] RuleContainer created")
     
     _ = generate_sequential_grids_cpu_sequential_cells_cpu(rule_container)
     var grids_seq_cpu_cells_par_cpu = generate_sequential_grids_cpu_parallel_cells_cpu(rule_container)

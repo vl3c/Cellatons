@@ -31,15 +31,20 @@ struct Grid(Copyable, Movable):
     var height: Int
     
     fn __init__(out self, width: Int, height: Int):
+        debug_log("Grid.__init__ starting")
+        debug_log_int("  width:", width)
+        debug_log_int("  height:", height)
         self.width = width
         self.height = height
         self.cells = List[List[Int]]()
         
+        debug_log("Allocating CPU cells...")
         for _ in range(height):
             var row = List[Int]()
             for _ in range(width):
                 row.append(0)
             self.cells.append(row^)
+        debug_log("Grid.__init__ complete")
     
     fn __copyinit__(out self, existing: Self):
         self.width = existing.width
