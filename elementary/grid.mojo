@@ -126,11 +126,10 @@ struct Grid(Copyable, Movable):
         var py_time = Python.import_module("time")
         var py_builder = Python.import_module("builtins")
         var py_operator = Python.import_module("operator")
-        var zero = py_builder.float(0.0)
-        var prep_duration = zero
-        var compute_duration = zero
-        var transfer_duration = zero
-        var total_duration = zero
+        var prep_duration: Float64 = 0.0
+        var compute_duration: Float64 = 0.0
+        var transfer_duration: Float64 = 0.0
+        var total_duration: Float64 = 0.0
         var runs = 0
         # Check if NVIDIA GPU is available
         if has_nvidia_gpu_accelerator():
@@ -143,17 +142,17 @@ struct Grid(Copyable, Movable):
             self.logger.log("Creating allowed patterns array")
             var allowed_array = self._create_allowed_patterns_array(rule, cp, py_builder)
             var prep_end = py_time.time()
-            prep_duration = py_operator.sub(prep_end, prep_start)
+            prep_duration = Float64(py_operator.sub(prep_end, prep_start))
             
             var compute_start = py_time.time()
             self.logger.log("Starting CuPy row computation")
             self._compute_rows_on_gpu(grid_gpu, allowed_array, cp, py_operator)
             var compute_end = py_time.time()
-            compute_duration = py_operator.sub(compute_end, compute_start)
+            compute_duration = Float64(py_operator.sub(compute_end, compute_start))
             self.logger.log("CuPy computation complete")
             
             var total_end = py_time.time()
-            total_duration = py_operator.sub(total_end, prep_start)
+            total_duration = Float64(py_operator.sub(total_end, prep_start))
             runs = 1
         else:
             self.logger.log("No NVIDIA GPU detected, falling back to CPU")
@@ -173,19 +172,13 @@ struct Grid(Copyable, Movable):
         var py_time = Python.import_module("time")
         var py_builtins = Python.import_module("builtins")
         var py_operator = Python.import_module("operator")
-        var zero = py_builtins.float(0.0)
-        var prep_duration = zero
-        var compute_duration = zero
-        var transfer_duration = zero
-        var total_duration = zero
-        var runs = 0
         
         @parameter
         if not has_accelerator():
             self.logger.log("No GPU accelerator detected")
             print("No GPU accelerator, using CPU fallback")
             self.generate_sequential_cpu(rule)
-            return GPUTimingResult(prep_duration, compute_duration, transfer_duration, total_duration, runs)
+            return GPUTimingResult(0.0, 0.0, 0.0, 0.0, 0)
         
         self.logger.log("GPU accelerator available, attempting full-grid mode")
         
@@ -215,7 +208,7 @@ struct Grid(Copyable, Movable):
         Allocates the entire grid on GPU, processes all rows, then optionally
         transfers back to CPU. Fastest mode but requires grid_size * 4 bytes of VRAM.
         """
-        var transfer_duration = py_builtins.float(0.0)  # No transfer in full-grid benchmark mode
+        var transfer_duration: Float64 = 0.0  # No transfer in full-grid benchmark mode
         
         var prep_start = py_time.time()
         
@@ -250,7 +243,7 @@ struct Grid(Copyable, Movable):
         var grid_tensor = LayoutTensor[cell_dtype, grid_layout](dev_grid)
         
         var prep_end = py_time.time()
-        var prep_duration = py_operator.sub(prep_end, prep_start)
+        var prep_duration = Float64(py_operator.sub(prep_end, prep_start))
         
         var compute_start = py_time.time()
         
@@ -279,13 +272,13 @@ struct Grid(Copyable, Movable):
         ctx.synchronize()
         
         var compute_end = py_time.time()
-        var compute_duration = py_operator.sub(compute_end, compute_start)
+        var compute_duration = Float64(py_operator.sub(compute_end, compute_start))
         
         # Note: We skip GPU→CPU transfer since we use CPU results for rendering
         # The grid stays on GPU and is discarded (benchmark only)
         
         var total_end = py_time.time()
-        var total_duration = py_operator.sub(total_end, prep_start)
+        var total_duration = Float64(py_operator.sub(total_end, prep_start))
         
         return GPUTimingResult(prep_duration, compute_duration, transfer_duration, total_duration, 1)
 
@@ -350,7 +343,7 @@ struct Grid(Copyable, Movable):
         var patterns_tensor = LayoutTensor[cell_dtype, patterns_layout](dev_patterns)
         
         var prep_end = py_time.time()
-        var prep_duration = py_operator.sub(prep_end, prep_start)
+        var prep_duration = Float64(py_operator.sub(prep_end, prep_start))
         
         var compute_start = py_time.time()
         
@@ -397,11 +390,11 @@ struct Grid(Copyable, Movable):
                 self.cells[row][col] = Int(host_row[col])
         
         var compute_end = py_time.time()
-        var compute_duration = py_operator.sub(compute_end, compute_start)
+        var compute_duration = Float64(py_operator.sub(compute_end, compute_start))
         var transfer_duration = compute_duration  # In ping-pong, compute and transfer are interleaved
         
         var total_end = py_time.time()
-        var total_duration = py_operator.sub(total_end, prep_start)
+        var total_duration = Float64(py_operator.sub(total_end, prep_start))
         
         self.logger.log("Ping-pong processing complete")
         return GPUTimingResult(prep_duration, compute_duration, transfer_duration, total_duration, 1)
@@ -431,13 +424,12 @@ struct Grid(Copyable, Movable):
         var py_time = Python.import_module("time")
         var py_builtins = Python.import_module("builtins")
         var py_operator = Python.import_module("operator")
-        var zero = py_builtins.float(0.0)
         
         @parameter
         if not has_accelerator():
             logger.log("No GPU accelerator detected")
             print("No GPU accelerator available for benchmark")
-            return GPUTimingResult(zero, zero, zero, zero, 0)
+            return GPUTimingResult(0.0, 0.0, 0.0, 0.0, 0)
         
         logger.log("Starting GPU-only benchmark (no CPU grid allocation)")
         var prep_start = py_time.time()
@@ -472,7 +464,7 @@ struct Grid(Copyable, Movable):
         var grid_tensor = LayoutTensor[cell_dtype, grid_layout](dev_grid)
         
         var prep_end = py_time.time()
-        var prep_duration = py_operator.sub(prep_end, prep_start)
+        var prep_duration = Float64(py_operator.sub(prep_end, prep_start))
         
         var compute_start = py_time.time()
         
@@ -501,11 +493,11 @@ struct Grid(Copyable, Movable):
         ctx.synchronize()
         
         var compute_end = py_time.time()
-        var compute_duration = py_operator.sub(compute_end, compute_start)
+        var compute_duration = Float64(py_operator.sub(compute_end, compute_start))
         
         var total_end = py_time.time()
-        var total_duration = py_operator.sub(total_end, prep_start)
-        var transfer_duration = py_builtins.float(0.0)  # No transfer in GPU-only mode
+        var total_duration = Float64(py_operator.sub(total_end, prep_start))
+        var transfer_duration: Float64 = 0.0  # No transfer in GPU-only mode
         
         return GPUTimingResult(prep_duration, compute_duration, transfer_duration, total_duration, 1)
 

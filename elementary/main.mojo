@@ -51,32 +51,32 @@ fn main() raises:
     
     # 4. CuPy GPU
     var grids4 = List[Grid]()
-    var g4 = py_builtins.float(0.0)
+    var g4: Float64 = 0.0
     var start4 = py_time.time()
     for rule in rule_container.rules:
         var grid = Grid(WIDTH, HEIGHT, logger)
         var stats = grid.generate_parallel_cells_cupy_gpu(rule)
-        g4 = py_operator.add(g4, stats.total)
+        g4 += stats.total
         grids4.append(grid^)
     bench.add_gpu("CuPy GPU", py_time.time() - start4, g4)
     
     # 5. Native GPU
     var grids5 = List[Grid]()
-    var g5 = py_builtins.float(0.0)
+    var g5: Float64 = 0.0
     var start5 = py_time.time()
     for rule in rule_container.rules:
         var grid = Grid(WIDTH, HEIGHT, logger)
         var stats = grid.generate_native_gpu(rule)
-        g5 = py_operator.add(g5, stats.total)
+        g5 += stats.total
         grids5.append(grid^)
     bench.add_gpu("Native GPU", py_time.time() - start5, g5)
     
     # 6. Native GPU (no CPU allocation)
-    var g6 = py_builtins.float(0.0)
+    var g6: Float64 = 0.0
     var start6 = py_time.time()
     for rule in rule_container.rules:
         var stats = Grid.benchmark_native_gpu(rule, logger)
-        g6 = py_operator.add(g6, stats.total)
+        g6 += stats.total
     bench.add_gpu("Native GPU (no CPU alloc)", py_time.time() - start6, g6)
     
     # Render if enabled

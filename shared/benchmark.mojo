@@ -52,9 +52,9 @@ struct BenchmarkSuite:
         """Add a CPU-only benchmark result."""
         self.results.append(BenchmarkResult(name, Float64(total_time)))
     
-    fn add_gpu(mut self, name: String, total_time: PythonObject, gpu_time: PythonObject) raises:
+    fn add_gpu(mut self, name: String, total_time: PythonObject, gpu_time: Float64) raises:
         """Add a GPU benchmark result."""
-        self.results.append(BenchmarkResult(name, Float64(total_time), Float64(gpu_time)))
+        self.results.append(BenchmarkResult(name, Float64(total_time), gpu_time))
     
     fn print_summary(self) raises:
         """Print formatted benchmark summary table."""
