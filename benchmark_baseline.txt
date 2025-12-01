@@ -52,3 +52,30 @@ Key Insights:
 - Native GPU (no CPU alloc) is 5.4x faster than Native GPU with CPU grid
 - Native GPU is 9.7x faster than CuPy GPU
 - Pure GPU compute time: 0.179s for 200M cells (1.1 billion cells/sec)
+
+LATEST (O(1) Bitmask Rule Lookup):
+----------------------------------
+Date: 2025-12-01
+Grid: 20,000 x 10,000 (200M cells) | 3 rules
+Memory: RAM 1.4 GB | VRAM 762 MB
+
+Method                       Total       GPU
+-----------------------------------------------
+CPU seq/seq                   3.375s       -
+CPU seq/par                   1.493s       -
+CPU par/seq                   0.121s       -
+CuPy GPU                      9.187s    5.627s
+Native GPU                    0.961s    0.629s
+Native GPU (no CPU alloc)     0.174s    0.174s
+-----------------------------------------------
+Total:                       15.698s
+
+Key Improvements (vs previous):
+- CPU seq/seq: 8.758s → 3.375s (2.6x faster)
+- CPU seq/par: 2.171s → 1.493s (1.5x faster)
+- CPU par/seq: 2.166s → 0.121s (18x faster!)
+- Total: 24.018s → 15.698s (35% reduction)
+
+Optimization:
+- Rule.apply() now uses O(1) bitmask lookup instead of O(n) string matching
+- Pre-computed 8-bit mask checks pattern in single bitshift + AND operation
