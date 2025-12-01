@@ -79,3 +79,53 @@ Key Improvements (vs previous):
 Optimization:
 - Rule.apply() now uses O(1) bitmask lookup instead of O(n) string matching
 - Pre-computed 8-bit mask checks pattern in single bitshift + AND operation
+
+LATEST (AVX-512 SIMD Vectorization):
+------------------------------------
+Date: 2025-12-01
+Grid: 20,000 x 10,000 (200M cells) | 3 rules
+Memory: RAM 1.4 GB | VRAM 762 MB
+CPU: AMD Ryzen 9800X3D (96MB 3D V-Cache, AVX-512)
+GPU: NVIDIA RTX 4070
+
+Method                       Total       GPU
+-----------------------------------------------
+seq grids / seq cells         3.824s       -
+seq grids / par cells         1.273s       -
+par grids / seq cells         0.127s       -
+seq grids / SIMD cells        0.924s       -
+par grids / SIMD cells        0.187s       -
+par grids / SIMD (no sync)    0.016s       -   ← FASTEST!
+CuPy GPU                      9.472s    5.725s
+Native GPU                    1.124s    0.627s
+Native GPU (no CPU alloc)     0.178s    0.178s
+-----------------------------------------------
+
+Naming Convention:
+- "grids" = how the 3 rules are processed (seq = one at a time, par = all 3 in parallel)
+- "cells" = how cells in each row are processed (seq, par, or SIMD)
+
+Key Insight - Sync Overhead:
+┌─────────────────────────┬────────────┬─────────┬─────────┐
+│ Method                  │ Compute    │ Sync    │ Total   │
+├─────────────────────────┼────────────┼─────────┼─────────┤
+│ par grids / seq cells   │ 0.127s     │ 0s      │ 0.127s  │
+│ par grids / SIMD cells  │ ~0.016s    │ ~0.171s │ 0.187s  │
+│ par grids / SIMD (none) │ ~0.016s    │ 0s      │ 0.016s  │
+└─────────────────────────┴────────────┴─────────┴─────────┘
+
+Why "par grids / seq cells" (0.127s) beats "par grids / SIMD cells" (0.187s):
+- SIMD uses flat UInt8 buffer for vectorization
+- Must sync (copy) 200M values back to List[List[Int]] for compatibility
+- Sync takes 0.171s (91% of total time!)
+- Pure SIMD compute is 8x faster (0.016s vs 0.127s)
+
+SIMD Implementation:
+- Parallel bitmask lookup: (mask_vec >> codes) & 1 for 64 cells per instruction
+- AVX-512: 512 bits / 8 bits = 64 cells processed simultaneously
+- Throughput: 200M cells / 0.016s = 12.5 billion cells/second
+
+CPU vs GPU Comparison:
+- CPU SIMD (no sync): 0.016s - 11x faster than GPU!
+- GPU (no CPU alloc): 0.178s
+- The 9800X3D's 96MB L3 cache + AVX-512 beats GPU for this cache-friendly workload
