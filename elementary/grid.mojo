@@ -162,7 +162,6 @@ struct Grid(Copyable, Movable):
             
             # Build allowed patterns
             var allowed = self._build_allowed_patterns(rule)
-            var num_patterns = len(allowed)
             
             # Create device context
             var ctx = DeviceContext()
@@ -175,7 +174,7 @@ struct Grid(Copyable, Movable):
             
             # Initialize patterns on host (pad with -1 for unused slots)
             for i in range(max_patterns):
-                if i < num_patterns:
+                if i < len(allowed):
                     host_patterns[i] = Int32(allowed[i])
                 else:
                     host_patterns[i] = Int32(-1)
@@ -208,7 +207,6 @@ struct Grid(Copyable, Movable):
                 ctx.enqueue_function_checked[automaton_grid_kernel, automaton_grid_kernel](
                     grid_tensor,
                     patterns_tensor,
-                    num_patterns,
                     row,
                     grid_dim=num_blocks,
                     block_dim=gpu_block_size,

@@ -17,29 +17,118 @@ alias max_patterns = 8  # Maximum number of patterns (8 possible for 3-bit patte
 alias patterns_layout = Layout.row_major(max_patterns)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Abstraction Layer: 2D Grid access over 1D memory
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@always_inline
+fn get_cell(
+    grid: LayoutTensor[cell_dtype, grid_layout, MutAnyOrigin],
+    row: Int,
+    col: Int,
+) -> Int:
+    """Access grid as if it were 2D."""
+    return Int(grid[row * WIDTH + col])
+
+
+@always_inline
+fn set_cell(
+    grid: LayoutTensor[cell_dtype, grid_layout, MutAnyOrigin],
+    row: Int,
+    col: Int,
+    value: Int32,
+):
+    """Write to grid as if it were 2D."""
+    grid[row * WIDTH + col] = value
+
+
+@fieldwise_init
+struct Neighborhood(Copyable, Movable):
+    """The 3-cell neighborhood from the previous row."""
+
+    var left: Int
+    var center: Int
+    var right: Int
+
+    @always_inline
+    fn to_pattern_code(self) -> Int:
+        """Convert neighborhood to pattern code (0-7)."""
+        return self.left * 4 + self.center * 2 + self.right
+
+
+@always_inline
+fn get_neighborhood(
+    grid: LayoutTensor[cell_dtype, grid_layout, MutAnyOrigin],
+    row: Int,
+    col: Int,
+) -> Neighborhood:
+    """Get the 3 cells above the current position."""
+    return Neighborhood(
+        get_cell(grid, row - 1, col - 1),
+        get_cell(grid, row - 1, col),
+        get_cell(grid, row - 1, col + 1),
+    )
+
+
+@always_inline
+fn get_row_neighborhood(
+    row: LayoutTensor[cell_dtype, row_layout, MutAnyOrigin],
+    col: Int,
+) -> Neighborhood:
+    """Get the 3 cells from a row tensor."""
+    return Neighborhood(
+        Int(row[col - 1]),
+        Int(row[col]),
+        Int(row[col + 1]),
+    )
+
+
+@always_inline
+fn get_thread_col() -> Int:
+    """Compute which column this thread is responsible for."""
+    return Int(block_idx.x * block_dim.x + thread_idx.x)
+
+
+@always_inline
+fn is_interior_cell(col: Int) -> Bool:
+    """Check if this is a valid interior cell (not an edge)."""
+    return col >= 1 and col < WIDTH - 1
+
+
+@always_inline
+fn compute_cell_value(
+    allowed_patterns: LayoutTensor[cell_dtype, patterns_layout, MutAnyOrigin],
+    code: Int,
+) -> Int32:
+    """Determine if the pattern produces a live cell.
+    
+    Checks all 8 pattern slots. Unused slots contain -1, which never matches
+    valid codes (0-7), so no explicit count is needed.
+    """
+    for i in range(max_patterns):
+        if Int(allowed_patterns[i]) == code:
+            return 1
+    return 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GPU Kernels: Clean business logic using abstractions
+# ─────────────────────────────────────────────────────────────────────────────
+
+
 fn automaton_row_kernel(
     prev_row: LayoutTensor[cell_dtype, row_layout, MutAnyOrigin],
     curr_row: LayoutTensor[cell_dtype, row_layout, MutAnyOrigin],
     allowed_patterns: LayoutTensor[cell_dtype, patterns_layout, MutAnyOrigin],
-    num_patterns: Int,
 ):
     """GPU kernel to compute one row of the cellular automaton (ping-pong version)."""
-    var tid = Int(block_idx.x * block_dim.x + thread_idx.x)
-    
-    # Only process valid interior cells
-    if tid >= 1 and tid < WIDTH - 1:
-        var left = Int(prev_row[tid - 1])
-        var center = Int(prev_row[tid])
-        var right = Int(prev_row[tid + 1])
-        var code = left * 4 + center * 2 + right
-        
-        # Check if code matches any allowed pattern
-        var result: Int32 = 0
-        for i in range(num_patterns):
-            if Int(allowed_patterns[i]) == code:
-                result = 1
-                break
-        curr_row[tid] = result
+    var col = get_thread_col()
+
+    if is_interior_cell(col):
+        var neighborhood = get_row_neighborhood(prev_row, col)
+        var code = neighborhood.to_pattern_code()
+        curr_row[col] = compute_cell_value(allowed_patterns, code)
 
 
 fn init_center_kernel(
@@ -52,28 +141,13 @@ fn init_center_kernel(
 fn automaton_grid_kernel(
     grid: LayoutTensor[cell_dtype, grid_layout, MutAnyOrigin],
     allowed_patterns: LayoutTensor[cell_dtype, patterns_layout, MutAnyOrigin],
-    num_patterns: Int,
     row_idx: Int,
 ):
     """GPU kernel to compute one row of the cellular automaton (full grid version)."""
-    var col = Int(block_idx.x * block_dim.x + thread_idx.x)
-    
-    # Only process valid interior cells
-    if col >= 1 and col < WIDTH - 1:
-        # Calculate offsets into flattened grid
-        var prev_row_offset = (row_idx - 1) * WIDTH
-        var curr_row_offset = row_idx * WIDTH
-        
-        var left = Int(grid[prev_row_offset + col - 1])
-        var center = Int(grid[prev_row_offset + col])
-        var right = Int(grid[prev_row_offset + col + 1])
-        var code = left * 4 + center * 2 + right
-        
-        # Check if code matches any allowed pattern
-        var result: Int32 = 0
-        for i in range(num_patterns):
-            if Int(allowed_patterns[i]) == code:
-                result = 1
-                break
-        grid[curr_row_offset + col] = result
+    var col = get_thread_col()
 
+    if is_interior_cell(col):
+        var neighborhood = get_neighborhood(grid, row_idx, col)
+        var code = neighborhood.to_pattern_code()
+        var result = compute_cell_value(allowed_patterns, code)
+        set_cell(grid, row_idx, col, result)
