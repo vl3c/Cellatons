@@ -3,7 +3,7 @@
 from gpu.host import DeviceContext
 from gpu import block_dim, block_idx, thread_idx
 from layout import Layout, LayoutTensor
-from common import WIDTH, HEIGHT
+from shared.common import WIDTH, HEIGHT
 
 # GPU kernel constants
 alias cell_dtype = DType.int32

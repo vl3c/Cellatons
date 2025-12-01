@@ -15,4 +15,3 @@ fn format_time(elapsed: PythonObject) -> String:
     var py_builtins = Python.import_module("builtins")
     var elapsed_str: String = py_builtins.format(elapsed, ".3f").__str__()
     return elapsed_str
-

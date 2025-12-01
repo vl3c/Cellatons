@@ -1,7 +1,7 @@
 from python import Python
-from grid import Grid
-from rule_container import RuleContainer
-from common import get_filename, CELL_SIZE
+from elementary.grid import Grid
+from elementary.rule_container import RuleContainer
+from shared.common import get_filename, CELL_SIZE
 
 struct Renderer:
     fn __init__(out self):

@@ -1,4 +1,4 @@
-from rule import Rule
+from elementary.rule import Rule
 
 struct RuleContainer:
     var rules: List[Rule]

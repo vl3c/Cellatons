@@ -1,10 +1,10 @@
 from python import Python
-from rule import Rule
-from grid import Grid
-from rule_container import RuleContainer
+from elementary.rule import Rule
+from elementary.grid import Grid
+from elementary.rule_container import RuleContainer
 from algorithm import parallelize
-from common import WIDTH, HEIGHT, RENDER_PNGS, get_filename
-from renderer import Renderer
+from shared.common import WIDTH, HEIGHT, RENDER_PNGS, get_filename
+from elementary.renderer import Renderer
 
 fn generate_sequential_grids_cpu_sequential_cells_cpu(rule_container: RuleContainer) raises -> List[Grid]:
     var py_time = Python.import_module("time")

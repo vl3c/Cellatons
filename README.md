@@ -1,6 +1,9 @@
-# Cellatons - Cellular Automatons Generator (Mojo)
+# Cellatons - Cellular Automata Generator (Mojo)
 
-A cellular automatons generator in [Mojo](https://www.modular.com/mojo), showcasing both CPU and GPU execution paths for large-scale 2D rule-based automata.
+A cellular automata generator in [Mojo](https://www.modular.com/mojo), showcasing both CPU and GPU execution paths. This project contains two sub-projects:
+
+1. **Elementary Cellular Automata** - 1D rule-based automata (Rule 30, 110, 254, etc.)
+2. **Conway's Game of Life** - 2D simultaneous-update automaton (coming soon)
 
 ## Features
 
@@ -10,7 +13,8 @@ A cellular automatons generator in [Mojo](https://www.modular.com/mojo), showcas
   - Parallel cells on CPU
   - Parallel grids on CPU
   - CuPy GPU path
-- **PNG output** (optional) via Python’s Pillow integration.
+  - Native Mojo GPU path
+- **PNG output** (optional) via Python's Pillow integration.
 - Extensive timing logs (total vs. GPU-only).
 
 ## Requirements
@@ -27,15 +31,20 @@ All dependencies are pinned in `pixi.toml` / `pixi.lock`.
 
 ```
 .
-├── grid.mojo               # Grid struct, CPU and CuPy GPU logic
-├── rule.mojo               # Rule definition
-├── rule_container.mojo     # Pre-defined rule set
-├── renderer.mojo           # PNG export via Pillow
-├── gpu_timing_result.mojo  # Lightweight struct for GPU timing stats
-├── common.mojo             # Global aliases + helpers
-├── main.mojo               # Entry point, orchestrates runs + logging
-├── pixi.toml / pixi.lock   # Pixi env definition
-├── generated/              # PNG outputs (ignored in Git)
+├── shared/                   # Shared utilities
+│   ├── common.mojo           # Global aliases + helpers (WIDTH, HEIGHT, etc.)
+│   └── gpu_timing_result.mojo # Lightweight struct for GPU timing stats
+├── elementary/               # 1D Elementary Cellular Automata
+│   ├── main.mojo             # Entry point for 1D CA
+│   ├── grid.mojo             # Grid struct, CPU and GPU logic
+│   ├── rule.mojo             # Rule definition (3-neighbor patterns)
+│   ├── rule_container.mojo   # Pre-defined rule set (30, 110, 254)
+│   ├── gpu_kernels.mojo      # Native Mojo GPU kernels
+│   └── renderer.mojo         # PNG export via Pillow
+├── conway/                   # Conway's Game of Life (coming soon)
+│   └── main.mojo             # Entry point for GoL
+├── generated/                # PNG/video outputs (shared by all sub-projects)
+├── pixi.toml / pixi.lock     # Pixi env definition
 └── README.md
 ```
 
@@ -49,22 +58,26 @@ All dependencies are pinned in `pixi.toml` / `pixi.lock`.
    ```bash
    pixi install
    ```
-3. **Run benchmarks**:
+3. **Run Elementary Cellular Automata**:
    ```bash
-   pixi run mojo main.mojo
+   pixi run mojo elementary/main.mojo
+   ```
+4. **Run Conway's Game of Life** (coming soon):
+   ```bash
+   pixi run mojo conway/main.mojo
    ```
 
 ### Disabling PNG Output
-By default, PNG generation is enabled. Attention: PNG rendering is expensive (hundreds of seconds on huge grids).
-
-To disable, in `common.mojo`, set:
+By default, PNG generation is disabled (benchmark mode). To enable, in `shared/common.mojo`, set:
 ```mojo
-alias RENDER_PNGS: Bool = False
+alias RENDER_PNGS: Bool = True
 ```
+
+Attention: PNG rendering is expensive (hundreds of seconds on huge grids).
 
 ### Adjusting Grid Size
 
-`common.mojo` exposes:
+`shared/common.mojo` exposes:
 ```mojo
 alias WIDTH: Int = …
 alias HEIGHT: Int = …

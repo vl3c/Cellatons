@@ -1,16 +1,16 @@
 from python import Python, PythonObject
-from rule import Rule
+from elementary.rule import Rule
 from algorithm import parallelize
 from sys.info import has_nvidia_gpu_accelerator
 from sys import has_accelerator
-from common import CELL_SIZE, WIDTH, HEIGHT
-from gpu_timing_result import GPUTimingResult
+from shared.common import CELL_SIZE, WIDTH, HEIGHT
+from shared.gpu_timing_result import GPUTimingResult
 from math import ceildiv
 
 # Native GPU imports
 from gpu.host import DeviceContext
 from layout import LayoutTensor
-from gpu_kernels import (
+from elementary.gpu_kernels import (
     cell_dtype,
     gpu_block_size,
     grid_size,
