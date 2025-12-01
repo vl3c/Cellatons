@@ -33,7 +33,7 @@ fn grids_equal(grid1: Grid, grid2: Grid) -> Bool:
         return False
     for row in range(grid1.height):
         for col in range(grid1.width):
-            if grid1.cells[row][col] != grid2.cells[row][col]:
+            if grid1.get_cell(row, col) != grid2.get_cell(row, col):
                 return False
     return True
 
@@ -48,7 +48,7 @@ fn test_sequential_cpu_center_initialized() raises:
     var rule = create_rule_110()
     var grid = Grid(WIDTH, HEIGHT, logger)
     grid.generate_sequential_cpu(rule)
-    assert_equal(grid.cells[0][WIDTH // 2], 1)
+    assert_equal(grid.get_cell(0, WIDTH // 2), 1)
 
 
 fn test_sequential_cpu_edges_zero() raises:
@@ -59,8 +59,8 @@ fn test_sequential_cpu_edges_zero() raises:
     grid.generate_sequential_cpu(rule)
     
     for row in range(min(100, HEIGHT)):
-        assert_equal(grid.cells[row][0], 0)
-        assert_equal(grid.cells[row][WIDTH - 1], 0)
+        assert_equal(grid.get_cell(row, 0), 0)
+        assert_equal(grid.get_cell(row, WIDTH - 1), 0)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -73,7 +73,7 @@ fn test_parallel_cpu_center_initialized() raises:
     var rule = create_rule_110()
     var grid = Grid(WIDTH, HEIGHT, logger)
     grid.generate_parallel_cpu(rule)
-    assert_equal(grid.cells[0][WIDTH // 2], 1)
+    assert_equal(grid.get_cell(0, WIDTH // 2), 1)
 
 
 fn test_parallel_cpu_edges_zero() raises:
@@ -84,8 +84,8 @@ fn test_parallel_cpu_edges_zero() raises:
     grid.generate_parallel_cpu(rule)
     
     for row in range(min(100, HEIGHT)):
-        assert_equal(grid.cells[row][0], 0)
-        assert_equal(grid.cells[row][WIDTH - 1], 0)
+        assert_equal(grid.get_cell(row, 0), 0)
+        assert_equal(grid.get_cell(row, WIDTH - 1), 0)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

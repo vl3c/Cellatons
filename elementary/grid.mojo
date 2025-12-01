@@ -29,8 +29,7 @@ alias simd_width = 64  # AVX-512: 512 bits / 8 bits = 64 cells
 
 
 struct Grid(Copyable, Movable):
-    var cells: List[List[Int]]
-    var flat_cells: List[UInt8]  # SIMD-friendly flat buffer
+    var cells: List[UInt8]  # Flat buffer with 2D indexing: cells[row * width + col]
     var width: Int
     var height: Int
     var logger: Logger
@@ -42,21 +41,14 @@ struct Grid(Copyable, Movable):
         self.logger.log_int("  height:", height)
         self.width = width
         self.height = height
-        self.cells = List[List[Int]]()
         
         # Allocate flat buffer with padding for SIMD safety
         var flat_size = width * height + simd_width
-        self.flat_cells = List[UInt8](capacity=flat_size)
-        # Zero-initialize flat buffer
+        self.cells = List[UInt8](capacity=flat_size)
+        # Zero-initialize
         for _ in range(flat_size):
-            self.flat_cells.append(0)
+            self.cells.append(0)
         
-        self.logger.log("Allocating CPU cells...")
-        for _ in range(height):
-            var row = List[Int]()
-            for _ in range(width):
-                row.append(0)
-            self.cells.append(row^)
         self.logger.log("Grid.__init__ complete")
     
     fn __copyinit__(out self, existing: Self):
@@ -65,29 +57,28 @@ struct Grid(Copyable, Movable):
         self.logger = existing.logger.copy()
         
         # Copy flat buffer
-        self.flat_cells = List[UInt8](capacity=len(existing.flat_cells))
-        for i in range(len(existing.flat_cells)):
-            self.flat_cells.append(existing.flat_cells[i])
-        
-        self.cells = List[List[Int]]()
+        self.cells = List[UInt8](capacity=len(existing.cells))
         for i in range(len(existing.cells)):
-            var row = List[Int]()
-            for j in range(len(existing.cells[i])):
-                row.append(existing.cells[i][j])
-            self.cells.append(row^)
+            self.cells.append(existing.cells[i])
     
     fn __moveinit__(out self, deinit existing: Self):
         self.width = existing.width
         self.height = existing.height
         self.logger = existing.logger^
         self.cells = existing.cells^
-        self.flat_cells = existing.flat_cells^
     
+    @always_inline
     fn set_cell(mut self, row: Int, col: Int, value: Int):
-        self.cells[row][col] = value
+        self.cells[row * self.width + col] = UInt8(value)
     
+    @always_inline
     fn get_cell(self, row: Int, col: Int) -> Int:
-        return self.cells[row][col]
+        return Int(self.cells[row * self.width + col])
+    
+    @always_inline
+    fn _idx(self, row: Int, col: Int) -> Int:
+        """Fast 2D to 1D index conversion."""
+        return row * self.width + col
     
     fn get_width(self) -> Int:
         return self.width
@@ -98,7 +89,7 @@ struct Grid(Copyable, Movable):
     fn generate_parallel_cpu(mut self, rule: Rule):
         self.logger.log("Entering generate_parallel_cpu")
         var center = self.width // 2
-        self.cells[0][center] = 1
+        self.cells[center] = 1  # Row 0, center column
         
         var left_bound = center
         var right_bound = center
@@ -109,14 +100,16 @@ struct Grid(Copyable, Movable):
             right_bound = right_bound + 1 if right_bound < self.width - 2 else self.width - 2
             var bound_width = right_bound - left_bound + 1
             var lb = left_bound  # Capture for closure
+            var prev_offset = (row - 1) * self.width
+            var curr_offset = row * self.width
             
             @parameter
             fn compute_cell(offset: Int):
                 var col = lb + offset
-                var left = self.cells[row - 1][col - 1]
-                var center_val = self.cells[row - 1][col]
-                var right = self.cells[row - 1][col + 1]
-                self.cells[row][col] = rule.apply(left, center_val, right)
+                var left = Int(self.cells[prev_offset + col - 1])
+                var center_val = Int(self.cells[prev_offset + col])
+                var right = Int(self.cells[prev_offset + col + 1])
+                self.cells[curr_offset + col] = UInt8(rule.apply(left, center_val, right))
             
             parallelize[compute_cell](bound_width)
         self.logger.log("Completed generate_parallel_cpu")
@@ -126,8 +119,8 @@ struct Grid(Copyable, Movable):
         self.logger.log("Entering generate_simd_cpu")
         var center = self.width // 2
         
-        # Initialize center cell in flat buffer
-        self.flat_cells[center] = 1
+        # Initialize center cell
+        self.cells[center] = 1
         
         # Pre-broadcast mask for SIMD operations
         var mask = rule.pattern_mask
@@ -142,39 +135,14 @@ struct Grid(Copyable, Movable):
             
             self._apply_rule_simd_row_fast(row, mask, left_bound, right_bound)
         
-        # Sync results to cells for compatibility
-        self._sync_flat_to_cells()
         self.logger.log("Completed generate_simd_cpu")
-    
-    fn generate_simd_cpu_no_sync(mut self, rule: Rule):
-        """Generate using SIMD without syncing back to cells (for benchmarking)."""
-        self.logger.log("Entering generate_simd_cpu_no_sync")
-        var center = self.width // 2
-        
-        # Initialize center cell in flat buffer
-        self.flat_cells[center] = 1
-        
-        # Pre-broadcast mask for SIMD operations
-        var mask = rule.pattern_mask
-        
-        var left_bound = center
-        var right_bound = center
-        
-        for row in range(1, self.height):
-            # Expand bounds (inverted pyramid)
-            left_bound = max(1, left_bound - 1)
-            right_bound = min(self.width - 2, right_bound + 1)
-            
-            self._apply_rule_simd_row_fast(row, mask, left_bound, right_bound)
-        
-        self.logger.log("Completed generate_simd_cpu_no_sync")
     
     fn _apply_rule_simd_row_fast(mut self, row: Int, mask: Int, left: Int, right: Int):
         """Process row using fully vectorized SIMD operations."""
         var prev_offset = (row - 1) * self.width
         var curr_offset = row * self.width
         var bound_width = right - left + 1
-        var ptr = self.flat_cells.unsafe_ptr()
+        var ptr = self.cells.unsafe_ptr()
         
         # Broadcast mask to SIMD vector once
         var mask_vec = SIMD[DType.int32, simd_width](mask)
@@ -202,22 +170,16 @@ struct Grid(Copyable, Movable):
         # Process remaining cells with scalar bitmask (still O(1) per cell)
         var remaining_start = left + full_chunks * simd_width
         for col in range(remaining_start, right + 1):
-            var l = Int(self.flat_cells[prev_offset + col - 1])
-            var c = Int(self.flat_cells[prev_offset + col])
-            var r = Int(self.flat_cells[prev_offset + col + 1])
+            var l = Int(self.cells[prev_offset + col - 1])
+            var c = Int(self.cells[prev_offset + col])
+            var r = Int(self.cells[prev_offset + col + 1])
             var code = l * 4 + c * 2 + r
-            self.flat_cells[curr_offset + col] = UInt8((mask >> code) & 1)
-    
-    fn _sync_flat_to_cells(mut self):
-        """Copy flat buffer to cells for rendering compatibility."""
-        for row in range(self.height):
-            for col in range(self.width):
-                self.cells[row][col] = Int(self.flat_cells[row * self.width + col])
+            self.cells[curr_offset + col] = UInt8((mask >> code) & 1)
     
     fn generate_sequential_cpu(mut self, rule: Rule):
         self.logger.log("Entering generate_sequential_cpu")
         var center = self.width // 2
-        self.cells[0][center] = 1
+        self.cells[center] = 1  # Row 0, center column
         
         var left_bound = center
         var right_bound = center
@@ -232,7 +194,7 @@ struct Grid(Copyable, Movable):
     fn generate_parallel_cells_cupy_gpu(mut self, rule: Rule) raises -> GPUTimingResult:
         self.logger.log("Entering generate_parallel_cells_cupy_gpu")
         # Set initial cell in the middle of the first row
-        self.cells[0][self.width // 2] = 1
+        self.cells[self.width // 2] = 1  # Row 0, center column
         
         var py_time = Python.import_module("time")
         var py_builder = Python.import_module("builtins")
@@ -446,7 +408,7 @@ struct Grid(Copyable, Movable):
         ctx.synchronize()
         
         # Store first row in CPU grid
-        self.cells[0][WIDTH // 2] = 1
+        self.cells[WIDTH // 2] = 1  # Row 0, center column
         
         # Create tensor views
         var row_a_tensor = LayoutTensor[cell_dtype, row_layout](dev_row_a)
@@ -497,8 +459,9 @@ struct Grid(Copyable, Movable):
                 ctx.synchronize()
             
             # Transfer from host buffer to CPU grid
+            var row_offset = row * self.width
             for col in range(WIDTH):
-                self.cells[row][col] = Int(host_row[col])
+                self.cells[row_offset + col] = UInt8(host_row[col])
         
         var compute_end = py_time.time()
         var compute_duration = Float64(py_operator.sub(compute_end, compute_start))
@@ -632,20 +595,23 @@ struct Grid(Copyable, Movable):
         return value
 
     fn _apply_rule_cpu_row(mut self, row: Int, rule: Rule):
+        var prev_offset = (row - 1) * self.width
+        var curr_offset = row * self.width
         for col in range(1, self.width - 1):
-            var left = self.cells[row - 1][col - 1]
-            var center = self.cells[row - 1][col]
-            var right = self.cells[row - 1][col + 1]
-            
-            self.cells[row][col] = rule.apply(left, center, right)
+            var left = Int(self.cells[prev_offset + col - 1])
+            var center = Int(self.cells[prev_offset + col])
+            var right = Int(self.cells[prev_offset + col + 1])
+            self.cells[curr_offset + col] = UInt8(rule.apply(left, center, right))
 
     fn _apply_rule_cpu_row_bounded(mut self, row: Int, rule: Rule, left_bound: Int, right_bound: Int):
+        var prev_offset = (row - 1) * self.width
+        var curr_offset = row * self.width
         for col in range(left_bound, right_bound + 1):
             if col >= 1 and col < self.width - 1:
-                var left = self.cells[row - 1][col - 1]
-                var center = self.cells[row - 1][col]
-                var right = self.cells[row - 1][col + 1]
-                self.cells[row][col] = rule.apply(left, center, right)
+                var left = Int(self.cells[prev_offset + col - 1])
+                var center = Int(self.cells[prev_offset + col])
+                var right = Int(self.cells[prev_offset + col + 1])
+                self.cells[curr_offset + col] = UInt8(rule.apply(left, center, right))
 
     fn _init_gpu_grid(self, cp: PythonObject, builtins: PythonObject, operator: PythonObject) raises -> PythonObject:
         var grid_shape = builtins.tuple([self.height, self.width])
@@ -679,10 +645,11 @@ struct Grid(Copyable, Movable):
     fn _copy_gpu_results_to_cpu(mut self, grid_gpu: PythonObject) raises:
         var result_gpu = grid_gpu.tolist()
         for row in range(self.height):
+            var row_offset = row * self.width
             var row_values = result_gpu.__getitem__(row)
             for col in range(self.width):
                 var value_py = row_values.__getitem__(col)
                 if value_py == 0:
-                    self.cells[row][col] = 0
+                    self.cells[row_offset + col] = 0
                 else:
-                    self.cells[row][col] = 1
+                    self.cells[row_offset + col] = 1

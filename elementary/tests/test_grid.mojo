@@ -29,7 +29,7 @@ fn test_grid_initialized_with_zeros() raises:
     var all_zeros = True
     for row in range(min(100, HEIGHT)):
         for col in range(min(100, WIDTH)):
-            if grid.cells[row][col] != 0:
+            if grid.get_cell(row, col) != 0:
                 all_zeros = False
                 break
     assert_true(all_zeros, "Grid should be initialized with all zeros")

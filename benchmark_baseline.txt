@@ -129,3 +129,50 @@ CPU vs GPU Comparison:
 - CPU SIMD (no sync): 0.016s - 11x faster than GPU!
 - GPU (no CPU alloc): 0.178s
 - The 9800X3D's 96MB L3 cache + AVX-512 beats GPU for this cache-friendly workload
+
+LATEST (Flat Buffer Migration - Zero Sync Overhead):
+----------------------------------------------------
+Date: 2025-12-01
+Grid: 20,000 x 10,000 (200M cells) | 3 rules
+Memory: RAM ~200 MB (down from 1.4 GB) | VRAM 762 MB
+CPU: AMD Ryzen 9800X3D (96MB 3D V-Cache, AVX-512)
+GPU: NVIDIA RTX 4070
+
+Method                       Total       GPU
+-----------------------------------------------
+seq grids / seq cells         0.896s       -
+seq grids / par cells         0.353s       -
+par grids / seq cells         0.149s       -
+seq grids / SIMD cells        0.136s       -
+par grids / SIMD cells        0.011s       -   ← NEW RECORD!
+CuPy GPU                      9.052s    5.701s
+Native GPU                    0.757s    0.637s
+Native GPU (no CPU alloc)     0.182s    0.181s
+-----------------------------------------------
+Total:                       11.776s
+
+Migration: List[List[Int]] → List[UInt8] (flat buffer)
+- Eliminated sync overhead entirely (was 91% of SIMD time)
+- Single data structure for all methods
+- 8x memory reduction (Int → UInt8, no duplicate buffer)
+
+Performance Improvements (vs SIMD with sync):
+┌─────────────────────────┬──────────┬──────────┬─────────┐
+│ Method                  │ Before   │ After    │ Speedup │
+├─────────────────────────┼──────────┼──────────┼─────────┤
+│ seq grids / seq cells   │ 3.824s   │ 0.896s   │ 4.3x    │
+│ seq grids / par cells   │ 1.273s   │ 0.353s   │ 3.6x    │
+│ seq grids / SIMD cells  │ 0.924s   │ 0.136s   │ 6.8x    │
+│ par grids / SIMD cells  │ 0.187s   │ 0.011s   │ 17x     │
+└─────────────────────────┴──────────┴──────────┴─────────┘
+
+CPU SIMD vs GPU:
+- CPU SIMD: 0.011s = 18.2 billion cells/second
+- GPU (no alloc): 0.182s = 1.1 billion cells/second
+- CPU is 17x faster than GPU for this workload!
+
+Why CPU beats GPU:
+1. 3D V-Cache (96MB L3) keeps entire working set in cache
+2. AVX-512 processes 64 cells per instruction
+3. Zero memory transfer overhead (GPU requires PCIe transfers)
+4. Cache-friendly sequential access pattern

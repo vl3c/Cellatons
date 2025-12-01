@@ -69,46 +69,35 @@ fn main() raises:
     parallelize[gen5a](num_rules)
     bench.add("par grids / SIMD cells", py_time.time() - start5a)
     
-    # 6. CPU parallel/SIMD (no sync - pure SIMD benchmark)
-    var grids6a = List[Grid]()
-    for _ in range(num_rules):
-        grids6a.append(Grid(WIDTH, HEIGHT, logger))
-    var start6a = py_time.time()
-    @parameter
-    fn gen6a(i: Int):
-        grids6a[i].generate_simd_cpu_no_sync(rule_container.rules[i])
-    parallelize[gen6a](num_rules)
-    bench.add("par grids / SIMD (no sync)", py_time.time() - start6a)
+    # 6. CuPy GPU
+    var grids6 = List[Grid]()
+    var g6: Float64 = 0.0
+    var start6 = py_time.time()
+    for rule in rule_container.rules:
+        var grid = Grid(WIDTH, HEIGHT, logger)
+        var stats = grid.generate_parallel_cells_cupy_gpu(rule)
+        g6 += stats.total
+        grids6.append(grid^)
+    bench.add_gpu("CuPy GPU", py_time.time() - start6, g6)
     
-    # 7. CuPy GPU
+    # 7. Native GPU
     var grids7 = List[Grid]()
     var g7: Float64 = 0.0
     var start7 = py_time.time()
     for rule in rule_container.rules:
         var grid = Grid(WIDTH, HEIGHT, logger)
-        var stats = grid.generate_parallel_cells_cupy_gpu(rule)
+        var stats = grid.generate_native_gpu(rule)
         g7 += stats.total
         grids7.append(grid^)
-    bench.add_gpu("CuPy GPU", py_time.time() - start7, g7)
+    bench.add_gpu("Native GPU", py_time.time() - start7, g7)
     
-    # 8. Native GPU
-    var grids8 = List[Grid]()
+    # 8. Native GPU (no CPU allocation)
     var g8: Float64 = 0.0
     var start8 = py_time.time()
     for rule in rule_container.rules:
-        var grid = Grid(WIDTH, HEIGHT, logger)
-        var stats = grid.generate_native_gpu(rule)
-        g8 += stats.total
-        grids8.append(grid^)
-    bench.add_gpu("Native GPU", py_time.time() - start8, g8)
-    
-    # 9. Native GPU (no CPU allocation)
-    var g9: Float64 = 0.0
-    var start9 = py_time.time()
-    for rule in rule_container.rules:
         var stats = Grid.benchmark_native_gpu(rule, logger)
-        g9 += stats.total
-    bench.add_gpu("Native GPU (no CPU alloc)", py_time.time() - start9, g9)
+        g8 += stats.total
+    bench.add_gpu("Native GPU (no CPU alloc)", py_time.time() - start8, g8)
     
     # Render if enabled
     if RENDER_PNGS:

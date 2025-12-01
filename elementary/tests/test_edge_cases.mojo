@@ -23,7 +23,7 @@ fn test_empty_rule_center_cell_set() raises:
     var grid = Grid(WIDTH, HEIGHT, logger)
     grid.generate_sequential_cpu(empty_rule)
     
-    assert_equal(grid.cells[0][WIDTH // 2], 1)
+    assert_equal(grid.get_cell(0, WIDTH // 2), 1)
 
 
 fn test_empty_rule_row1_all_zeros() raises:
@@ -37,7 +37,7 @@ fn test_empty_rule_row1_all_zeros() raises:
     
     var row1_all_zero = True
     for col in range(WIDTH):
-        if grid.cells[1][col] != 0:
+        if grid.get_cell(1, col) != 0:
             row1_all_zero = False
             break
     assert_true(row1_all_zero, "Row 1 should be all zeros with empty rule")
@@ -66,7 +66,7 @@ fn test_all_rule_row1_center_active() raises:
     var grid = Grid(WIDTH, HEIGHT, logger)
     grid.generate_sequential_cpu(all_rule)
     
-    assert_equal(grid.cells[1][WIDTH // 2], 1)
+    assert_equal(grid.get_cell(1, WIDTH // 2), 1)
 
 
 fn test_all_rule_edges_still_zero() raises:
@@ -89,8 +89,8 @@ fn test_all_rule_edges_still_zero() raises:
     grid.generate_sequential_cpu(all_rule)
     
     # Edges should still be 0 (boundary condition)
-    assert_equal(grid.cells[1][0], 0)
-    assert_equal(grid.cells[1][WIDTH - 1], 0)
+    assert_equal(grid.get_cell(1, 0), 0)
+    assert_equal(grid.get_cell(1, WIDTH - 1), 0)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -120,7 +120,7 @@ fn test_first_row_center_is_1() raises:
     var rule = create_rule_110()
     var grid = Grid(WIDTH, HEIGHT, logger)
     grid.generate_sequential_cpu(rule)
-    assert_equal(grid.cells[0][WIDTH // 2], 1)
+    assert_equal(grid.get_cell(0, WIDTH // 2), 1)
 
 
 fn test_first_row_left_edge_is_0() raises:
@@ -129,7 +129,7 @@ fn test_first_row_left_edge_is_0() raises:
     var rule = create_rule_110()
     var grid = Grid(WIDTH, HEIGHT, logger)
     grid.generate_sequential_cpu(rule)
-    assert_equal(grid.cells[0][0], 0)
+    assert_equal(grid.get_cell(0, 0), 0)
 
 
 fn test_first_row_right_edge_is_0() raises:
@@ -138,7 +138,7 @@ fn test_first_row_right_edge_is_0() raises:
     var rule = create_rule_110()
     var grid = Grid(WIDTH, HEIGHT, logger)
     grid.generate_sequential_cpu(rule)
-    assert_equal(grid.cells[0][WIDTH - 1], 0)
+    assert_equal(grid.get_cell(0, WIDTH - 1), 0)
 
 
 fn test_last_row_left_edge_is_0() raises:
@@ -147,7 +147,7 @@ fn test_last_row_left_edge_is_0() raises:
     var rule = create_rule_110()
     var grid = Grid(WIDTH, HEIGHT, logger)
     grid.generate_sequential_cpu(rule)
-    assert_equal(grid.cells[HEIGHT - 1][0], 0)
+    assert_equal(grid.get_cell(HEIGHT - 1, 0), 0)
 
 
 fn test_last_row_right_edge_is_0() raises:
@@ -156,7 +156,7 @@ fn test_last_row_right_edge_is_0() raises:
     var rule = create_rule_110()
     var grid = Grid(WIDTH, HEIGHT, logger)
     grid.generate_sequential_cpu(rule)
-    assert_equal(grid.cells[HEIGHT - 1][WIDTH - 1], 0)
+    assert_equal(grid.get_cell(HEIGHT - 1, WIDTH - 1), 0)
 
 
 fn test_all_rows_edges_are_0() raises:
@@ -168,7 +168,7 @@ fn test_all_rows_edges_are_0() raises:
     
     var all_edges_zero = True
     for row in range(HEIGHT):
-        if grid.cells[row][0] != 0 or grid.cells[row][WIDTH - 1] != 0:
+        if grid.get_cell(row, 0) != 0 or grid.get_cell(row, WIDTH - 1) != 0:
             all_edges_zero = False
             break
     assert_true(all_edges_zero, "All rows should have edge cells as 0")
