@@ -1,7 +1,7 @@
 from python import Python, PythonObject
 from elementary.rule import Rule
-from algorithm import parallelize
-from sys.info import has_nvidia_gpu_accelerator
+from algorithm import parallelize, vectorize
+from sys.info import has_nvidia_gpu_accelerator, simdwidthof
 from sys import has_accelerator
 from shared.common import PIXELS_PER_CELL, WIDTH, HEIGHT
 from shared.gpu_timing_result import GPUTimingResult
@@ -24,9 +24,13 @@ from elementary.gpu_kernels import (
     automaton_row_kernel,
 )
 
+# SIMD configuration
+alias simd_width = 64  # AVX-512: 512 bits / 8 bits = 64 cells
+
 
 struct Grid(Copyable, Movable):
     var cells: List[List[Int]]
+    var flat_cells: List[UInt8]  # SIMD-friendly flat buffer
     var width: Int
     var height: Int
     var logger: Logger
@@ -40,6 +44,13 @@ struct Grid(Copyable, Movable):
         self.height = height
         self.cells = List[List[Int]]()
         
+        # Allocate flat buffer with padding for SIMD safety
+        var flat_size = width * height + simd_width
+        self.flat_cells = List[UInt8](capacity=flat_size)
+        # Zero-initialize flat buffer
+        for _ in range(flat_size):
+            self.flat_cells.append(0)
+        
         self.logger.log("Allocating CPU cells...")
         for _ in range(height):
             var row = List[Int]()
@@ -52,6 +63,12 @@ struct Grid(Copyable, Movable):
         self.width = existing.width
         self.height = existing.height
         self.logger = existing.logger.copy()
+        
+        # Copy flat buffer
+        self.flat_cells = List[UInt8](capacity=len(existing.flat_cells))
+        for i in range(len(existing.flat_cells)):
+            self.flat_cells.append(existing.flat_cells[i])
+        
         self.cells = List[List[Int]]()
         for i in range(len(existing.cells)):
             var row = List[Int]()
@@ -64,6 +81,7 @@ struct Grid(Copyable, Movable):
         self.height = existing.height
         self.logger = existing.logger^
         self.cells = existing.cells^
+        self.flat_cells = existing.flat_cells^
     
     fn set_cell(mut self, row: Int, col: Int, value: Int):
         self.cells[row][col] = value
@@ -102,6 +120,99 @@ struct Grid(Copyable, Movable):
             
             parallelize[compute_cell](bound_width)
         self.logger.log("Completed generate_parallel_cpu")
+    
+    fn generate_simd_cpu(mut self, rule: Rule):
+        """Generate using SIMD with sparse bounds optimization."""
+        self.logger.log("Entering generate_simd_cpu")
+        var center = self.width // 2
+        
+        # Initialize center cell in flat buffer
+        self.flat_cells[center] = 1
+        
+        # Pre-broadcast mask for SIMD operations
+        var mask = rule.pattern_mask
+        
+        var left_bound = center
+        var right_bound = center
+        
+        for row in range(1, self.height):
+            # Expand bounds (inverted pyramid)
+            left_bound = max(1, left_bound - 1)
+            right_bound = min(self.width - 2, right_bound + 1)
+            
+            self._apply_rule_simd_row_fast(row, mask, left_bound, right_bound)
+        
+        # Sync results to cells for compatibility
+        self._sync_flat_to_cells()
+        self.logger.log("Completed generate_simd_cpu")
+    
+    fn generate_simd_cpu_no_sync(mut self, rule: Rule):
+        """Generate using SIMD without syncing back to cells (for benchmarking)."""
+        self.logger.log("Entering generate_simd_cpu_no_sync")
+        var center = self.width // 2
+        
+        # Initialize center cell in flat buffer
+        self.flat_cells[center] = 1
+        
+        # Pre-broadcast mask for SIMD operations
+        var mask = rule.pattern_mask
+        
+        var left_bound = center
+        var right_bound = center
+        
+        for row in range(1, self.height):
+            # Expand bounds (inverted pyramid)
+            left_bound = max(1, left_bound - 1)
+            right_bound = min(self.width - 2, right_bound + 1)
+            
+            self._apply_rule_simd_row_fast(row, mask, left_bound, right_bound)
+        
+        self.logger.log("Completed generate_simd_cpu_no_sync")
+    
+    fn _apply_rule_simd_row_fast(mut self, row: Int, mask: Int, left: Int, right: Int):
+        """Process row using fully vectorized SIMD operations."""
+        var prev_offset = (row - 1) * self.width
+        var curr_offset = row * self.width
+        var bound_width = right - left + 1
+        var ptr = self.flat_cells.unsafe_ptr()
+        
+        # Broadcast mask to SIMD vector once
+        var mask_vec = SIMD[DType.int32, simd_width](mask)
+        
+        # Process full SIMD chunks
+        var full_chunks = bound_width // simd_width
+        
+        for chunk in range(full_chunks):
+            var col = left + chunk * simd_width
+            
+            # Load neighbors (3 overlapping loads)
+            var l = (ptr + prev_offset + col - 1).load[width=simd_width]()
+            var c = (ptr + prev_offset + col).load[width=simd_width]()
+            var r = (ptr + prev_offset + col + 1).load[width=simd_width]()
+            
+            # Compute pattern codes: left*4 + center*2 + right
+            var codes = l.cast[DType.int32]() * 4 + c.cast[DType.int32]() * 2 + r.cast[DType.int32]()
+            
+            # PARALLEL bitmask lookup: (mask >> codes) & 1 for all 64 values at once!
+            var results = ((mask_vec >> codes) & 1).cast[DType.uint8]()
+            
+            # Store results
+            (ptr + curr_offset + col).store(results)
+        
+        # Process remaining cells with scalar bitmask (still O(1) per cell)
+        var remaining_start = left + full_chunks * simd_width
+        for col in range(remaining_start, right + 1):
+            var l = Int(self.flat_cells[prev_offset + col - 1])
+            var c = Int(self.flat_cells[prev_offset + col])
+            var r = Int(self.flat_cells[prev_offset + col + 1])
+            var code = l * 4 + c * 2 + r
+            self.flat_cells[curr_offset + col] = UInt8((mask >> code) & 1)
+    
+    fn _sync_flat_to_cells(mut self):
+        """Copy flat buffer to cells for rendering compatibility."""
+        for row in range(self.height):
+            for col in range(self.width):
+                self.cells[row][col] = Int(self.flat_cells[row * self.width + col])
     
     fn generate_sequential_cpu(mut self, rule: Rule):
         self.logger.log("Entering generate_sequential_cpu")

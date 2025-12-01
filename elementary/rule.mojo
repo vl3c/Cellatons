@@ -3,6 +3,7 @@ struct Rule(Copyable, Movable):
     var output_name: String
     var pattern_groups: List[List[String]]
     var pattern_mask: Int  # 8-bit mask for O(1) lookup
+    var lookup_table: SIMD[DType.uint8, 8]  # Pre-expanded for SIMD shuffle
     
     fn __init__(out self, var name: String, var output_name: String, var pattern_groups: List[List[String]]):
         self.name = name^
@@ -10,12 +11,15 @@ struct Rule(Copyable, Movable):
         self.pattern_groups = pattern_groups^
         # Initialize pattern_mask after all other fields are set
         self.pattern_mask = 0
+        self.lookup_table = SIMD[DType.uint8, 8](0)
         self.pattern_mask = self._build_mask()
+        self.lookup_table = self._build_lookup_table()
     
     fn __copyinit__(out self, existing: Self):
         self.name = existing.name
         self.output_name = existing.output_name
         self.pattern_mask = existing.pattern_mask
+        self.lookup_table = existing.lookup_table
         self.pattern_groups = List[List[String]]()
         for i in range(len(existing.pattern_groups)):
             var inner_list = List[String]()
@@ -28,6 +32,7 @@ struct Rule(Copyable, Movable):
         self.output_name = existing.output_name^
         self.pattern_groups = existing.pattern_groups^
         self.pattern_mask = existing.pattern_mask
+        self.lookup_table = existing.lookup_table
     
     fn _build_mask(self) -> Int:
         """Pre-compute bitmask from pattern groups for O(1) lookup."""
@@ -37,6 +42,13 @@ struct Rule(Copyable, Movable):
                 var code = Self._pattern_to_code(self.pattern_groups[group][idx])
                 mask |= (1 << code)
         return mask
+    
+    fn _build_lookup_table(self) -> SIMD[DType.uint8, 8]:
+        """Expand bitmask into 8-element lookup table for SIMD shuffle."""
+        var table = SIMD[DType.uint8, 8](0)
+        for i in range(8):
+            table[i] = UInt8((self.pattern_mask >> i) & 1)
+        return table
     
     @staticmethod
     fn _pattern_to_code(pattern: String) -> Int:
