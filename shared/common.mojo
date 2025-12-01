@@ -1,10 +1,15 @@
 from python import Python
 
+# Grid dimensions (cells)
 alias WIDTH: Int = 20_000
 alias HEIGHT: Int = 10_000
-alias CELL_SIZE: Int = 2
+
+# Rendering: pixels per cell when saving PNGs
+alias PIXELS_PER_CELL: Int = 2
+
+# Feature flags
 alias RENDER_PNGS: Bool = False
-alias DEBUG: Bool = True
+alias DEBUG_LOGGING: Bool = True
 
 fn get_filename(output_name: String) -> String:
     var filename = String("generated/")

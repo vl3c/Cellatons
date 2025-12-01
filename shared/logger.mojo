@@ -4,7 +4,7 @@ Uses a Logger struct to track start time for relative timestamps.
 All functions are thread-safe and do not use Python.
 """
 
-from shared.common import DEBUG
+from shared.common import DEBUG_LOGGING
 from time import perf_counter_ns
 
 
@@ -43,11 +43,11 @@ struct Logger(Copyable, Movable):
     fn log(self, msg: String):
         """Print a debug message with relative timestamp."""
         @parameter
-        if DEBUG:
+        if DEBUG_LOGGING:
             print("[" + self._format_elapsed() + "s]", msg, flush=True)
     
     fn log_int(self, msg: String, value: Int):
         """Print a debug message with an integer value."""
         @parameter
-        if DEBUG:
+        if DEBUG_LOGGING:
             print("[" + self._format_elapsed() + "s]", msg, value, flush=True)

@@ -1,7 +1,7 @@
 from python import Python
 from elementary.grid import Grid
 from elementary.rule_container import RuleContainer
-from shared.common import get_filename, CELL_SIZE
+from shared.common import get_filename, PIXELS_PER_CELL
 
 struct Renderer:
     fn __init__(out self):
@@ -14,8 +14,8 @@ struct Renderer:
         var width = grid.get_width()
         var height = grid.get_height()
         
-        var img_width = width * CELL_SIZE
-        var img_height = height * CELL_SIZE
+        var img_width = width * PIXELS_PER_CELL
+        var img_height = height * PIXELS_PER_CELL
         
         var size = builtins.tuple([img_width, img_height])
         var img = PIL.new("RGB", size, "white")
@@ -24,10 +24,10 @@ struct Renderer:
         for row in range(height):
             for col in range(width):
                 if grid.get_cell(row, col) == 1:
-                    for py in range(CELL_SIZE):
-                        for px in range(CELL_SIZE):
-                            var x = col * CELL_SIZE + px
-                            var y = row * CELL_SIZE + py
+                    for py in range(PIXELS_PER_CELL):
+                        for px in range(PIXELS_PER_CELL):
+                            var x = col * PIXELS_PER_CELL + px
+                            var y = row * PIXELS_PER_CELL + py
                             var black = builtins.tuple([0, 0, 0])
                             pixels[x, y] = black
         

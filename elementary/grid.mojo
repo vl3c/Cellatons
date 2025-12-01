@@ -3,7 +3,7 @@ from elementary.rule import Rule
 from algorithm import parallelize
 from sys.info import has_nvidia_gpu_accelerator
 from sys import has_accelerator
-from shared.common import CELL_SIZE, WIDTH, HEIGHT
+from shared.common import PIXELS_PER_CELL, WIDTH, HEIGHT
 from shared.gpu_timing_result import GPUTimingResult
 from shared.logger import Logger
 from math import ceildiv
