@@ -416,6 +416,114 @@ struct Grid(Copyable, Movable):
             else:
                 host_patterns[i] = Int32(-1)
 
+    @staticmethod
+    fn benchmark_native_gpu(rule: Rule) raises -> GPUTimingResult:
+        """Benchmark native GPU without allocating CPU grid.
+        
+        This is a GPU-only benchmark that allocates directly on GPU without
+        creating a CPU-side grid. Use this for pure GPU performance testing
+        or when CPU memory is limited.
+        """
+        var py_time = Python.import_module("time")
+        var py_builtins = Python.import_module("builtins")
+        var py_operator = Python.import_module("operator")
+        var zero = py_builtins.float(0.0)
+        
+        @parameter
+        if not has_accelerator():
+            debug_log("No GPU accelerator detected")
+            print("No GPU accelerator available for benchmark")
+            return GPUTimingResult(zero, zero, zero, zero, 0)
+        
+        debug_log("Starting GPU-only benchmark (no CPU grid allocation)")
+        var prep_start = py_time.time()
+        
+        # Build allowed patterns (only needs rule, no grid)
+        var allowed = Grid._build_allowed_patterns_static(rule)
+        debug_log_int("Built allowed patterns, count:", len(allowed))
+        
+        # Create device context
+        debug_log("Creating GPU device context")
+        var ctx = DeviceContext()
+        
+        # Allocate GPU buffers ONLY - no CPU grid!
+        debug_log_int("Allocating host patterns buffer, size:", max_patterns)
+        var host_patterns = ctx.enqueue_create_host_buffer[cell_dtype](max_patterns)
+        debug_log_int("Allocating device grid buffer, size:", grid_size)
+        var dev_grid = ctx.enqueue_create_buffer[cell_dtype](grid_size)
+        debug_log_int("Allocating device patterns buffer, size:", max_patterns)
+        var dev_patterns = ctx.enqueue_create_buffer[cell_dtype](max_patterns)
+        debug_log("Synchronizing allocations")
+        ctx.synchronize()
+        debug_log("All GPU allocations successful")
+        
+        # Initialize patterns on host (pad with -1 for unused slots)
+        Grid._init_patterns_buffer(host_patterns, allowed)
+        
+        # Copy patterns to device
+        ctx.enqueue_copy(dev_patterns, host_patterns)
+        ctx.synchronize()
+        
+        # Create tensor view for the grid
+        var grid_tensor = LayoutTensor[cell_dtype, grid_layout](dev_grid)
+        
+        var prep_end = py_time.time()
+        var prep_duration = py_operator.sub(prep_end, prep_start)
+        
+        var compute_start = py_time.time()
+        
+        # Calculate grid dimensions for kernel launch
+        var num_blocks = Grid._get_num_blocks()
+        var patterns_tensor = LayoutTensor[cell_dtype, patterns_layout](dev_patterns)
+        
+        # First, set the initial cell (run init kernel with 1 thread)
+        ctx.enqueue_function_checked[init_center_kernel, init_center_kernel](
+            grid_tensor,
+            grid_dim=1,
+            block_dim=1,
+        )
+        
+        # Process ALL rows without syncing - just enqueue all kernels
+        for row in range(1, HEIGHT):
+            ctx.enqueue_function_checked[automaton_grid_kernel, automaton_grid_kernel](
+                grid_tensor,
+                patterns_tensor,
+                row,
+                grid_dim=num_blocks,
+                block_dim=gpu_block_size,
+            )
+        
+        # Single sync after all kernels are enqueued
+        ctx.synchronize()
+        
+        var compute_end = py_time.time()
+        var compute_duration = py_operator.sub(compute_end, compute_start)
+        
+        var total_end = py_time.time()
+        var total_duration = py_operator.sub(total_end, prep_start)
+        var transfer_duration = py_builtins.float(0.0)  # No transfer in GPU-only mode
+        
+        return GPUTimingResult(prep_duration, compute_duration, transfer_duration, total_duration, 1)
+
+    @staticmethod
+    fn _build_allowed_patterns_static(rule: Rule) -> List[Int]:
+        """Build allowed patterns from rule (static version for GPU-only benchmark)."""
+        var allowed = List[Int]()
+        for group in range(len(rule.pattern_groups)):
+            for idx in range(len(rule.pattern_groups[group])):
+                allowed.append(Grid._pattern_to_int_static(rule.pattern_groups[group][idx]))
+        return allowed^
+
+    @staticmethod
+    fn _pattern_to_int_static(pattern: String) -> Int:
+        """Convert pattern string to integer (static version)."""
+        var value: Int = 0
+        for idx in range(len(pattern)):
+            value = value << 1
+            if pattern[idx] == "1":
+                value += 1
+        return value
+
     fn _apply_rule_cpu_row(mut self, row: Int, rule: Rule):
         for col in range(1, self.width - 1):
             var left = self.cells[row - 1][col - 1]
