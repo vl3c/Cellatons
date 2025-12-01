@@ -220,7 +220,7 @@ struct Grid(Copyable, Movable):
         var prep_start = py_time.time()
         
         # Build allowed patterns
-        var allowed = self._build_allowed_patterns(rule)
+        var allowed = Self._build_allowed_patterns_static(rule)
         self.logger.log_int("Built allowed patterns, count:", len(allowed))
         
         # Create device context
@@ -305,7 +305,7 @@ struct Grid(Copyable, Movable):
         var prep_start = py_time.time()
         
         # Build allowed patterns
-        var allowed = self._build_allowed_patterns(rule)
+        var allowed = Self._build_allowed_patterns_static(rule)
         self.logger.log_int("Built allowed patterns, count:", len(allowed))
         
         # Create device context
@@ -552,7 +552,7 @@ struct Grid(Copyable, Movable):
         return grid_gpu
     
     fn _create_allowed_patterns_array(self, rule: Rule, cp: PythonObject, builtins: PythonObject) raises -> PythonObject:
-        var allowed_patterns = self._build_allowed_patterns(rule)
+        var allowed_patterns = Self._build_allowed_patterns_static(rule)
         var py_allowed = builtins.list()
         for idx in range(len(allowed_patterns)):
             py_allowed.append(allowed_patterns[idx])
@@ -583,18 +583,3 @@ struct Grid(Copyable, Movable):
                     self.cells[row][col] = 0
                 else:
                     self.cells[row][col] = 1
-    
-    fn _pattern_to_int(self, pattern: String) -> Int:
-        var value: Int = 0
-        for idx in range(len(pattern)):
-            value = value << 1
-            if pattern[idx] == "1":
-                value += 1
-        return value
-    
-    fn _build_allowed_patterns(self, rule: Rule) -> List[Int]:
-        var allowed = List[Int]()
-        for group in range(len(rule.pattern_groups)):
-            for idx in range(len(rule.pattern_groups[group])):
-                allowed.append(self._pattern_to_int(rule.pattern_groups[group][idx]))
-        return allowed^
