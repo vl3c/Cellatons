@@ -99,10 +99,10 @@ fn main() raises:
         g8 += stats.total
     bench.add_gpu("Native GPU (no CPU alloc)", py_time.time() - start8, g8)
     
-    # Render if enabled
+    # Render if enabled (using fastest method: par grids / SIMD cells)
     if RENDER_PNGS:
         var renderer = Renderer()
-        renderer.save_pngs(grids2, rule_container)
+        renderer.save_pngs(grids5a, rule_container)
     
     # Print summary
     bench.print_summary()
