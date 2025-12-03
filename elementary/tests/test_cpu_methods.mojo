@@ -105,3 +105,42 @@ fn test_sequential_parallel_produce_identical_results() raises:
     
     assert_true(grids_equal(grid_seq, grid_par), "Sequential and parallel should produce identical results")
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CPU SIMD Tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+fn test_simd_cpu_center_initialized() raises:
+    """Test that SIMD CPU initializes center cell."""
+    var logger = Logger()
+    var rule = create_rule_110()
+    var grid = Grid(WIDTH, HEIGHT, logger)
+    grid.generate_simd_cpu(rule)
+    assert_equal(grid.get_cell(0, WIDTH // 2), 1)
+
+
+fn test_simd_cpu_edges_zero() raises:
+    """Test that SIMD CPU keeps edge cells as zero."""
+    var logger = Logger()
+    var rule = create_rule_110()
+    var grid = Grid(WIDTH, HEIGHT, logger)
+    grid.generate_simd_cpu(rule)
+    
+    for row in range(min(100, HEIGHT)):
+        assert_equal(grid.get_cell(row, 0), 0)
+        assert_equal(grid.get_cell(row, WIDTH - 1), 0)
+
+
+fn test_simd_matches_sequential() raises:
+    """Test that SIMD CPU produces identical results to sequential."""
+    var logger = Logger()
+    var rule = create_rule_110()
+    
+    var grid_seq = Grid(WIDTH, HEIGHT, logger)
+    grid_seq.generate_sequential_cpu(rule)
+    
+    var grid_simd = Grid(WIDTH, HEIGHT, logger)
+    grid_simd.generate_simd_cpu(rule)
+    
+    assert_true(grids_equal(grid_seq, grid_simd), "SIMD and sequential should produce identical results")
+

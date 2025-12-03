@@ -14,6 +14,10 @@ from elementary.tests.test_grid import (
     test_grid_initialized_with_zeros,
     test_set_get_cell,
     test_center_position_valid,
+    test_stride_is_64_byte_aligned,
+    test_stride_at_least_width,
+    test_cell_access_across_rows,
+    test_cell_access_at_row_end,
 )
 
 from elementary.tests.test_cpu_methods import (
@@ -22,6 +26,9 @@ from elementary.tests.test_cpu_methods import (
     test_parallel_cpu_center_initialized,
     test_parallel_cpu_edges_zero,
     test_sequential_parallel_produce_identical_results,
+    test_simd_cpu_center_initialized,
+    test_simd_cpu_edges_zero,
+    test_simd_matches_sequential,
 )
 
 from elementary.tests.test_gpu_methods import (
@@ -77,6 +84,10 @@ def main():
     suite.test[test_grid_initialized_with_zeros]()
     suite.test[test_set_get_cell]()
     suite.test[test_center_position_valid]()
+    suite.test[test_stride_is_64_byte_aligned]()
+    suite.test[test_stride_at_least_width]()
+    suite.test[test_cell_access_across_rows]()
+    suite.test[test_cell_access_at_row_end]()
     
     # CPU method tests
     suite.test[test_sequential_cpu_center_initialized]()
@@ -84,6 +95,9 @@ def main():
     suite.test[test_parallel_cpu_center_initialized]()
     suite.test[test_parallel_cpu_edges_zero]()
     suite.test[test_sequential_parallel_produce_identical_results]()
+    suite.test[test_simd_cpu_center_initialized]()
+    suite.test[test_simd_cpu_edges_zero]()
+    suite.test[test_simd_matches_sequential]()
     
     # GPU method tests
     suite.test[test_native_gpu_executes_successfully]()
