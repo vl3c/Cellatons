@@ -178,7 +178,7 @@ Why CPU beats GPU:
 4. Cache-friendly sequential access pattern
 
 ================================================================================
-OPTIMIZATION JOURNEY: 15.335s → 0.011s (1,394x speedup!)
+OPTIMIZATION JOURNEY: 15.335s → 0.010s (1,534x speedup!)
 ================================================================================
 
 Original naive implementation:     15.335s
@@ -219,18 +219,104 @@ Original naive implementation:     15.335s
 └─────────────────────────────────────────────────────────┘
                                       │
                                       ▼
-                              Final: 0.011s
+┌─────────────────────────────────────────────────────────┐
+│ 6. Loop Unrolling (4x)                                  │
+│    Process 256 cells per loop iteration                 │
+│    0.011s → 0.010s (1.1x)                               │
+└─────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────┐
+│ 7. Memory Alignment (64-byte row stride)                │
+│    Align row starts for AVX-512 cache efficiency        │
+│    0.010s → 0.010s (no change - already at limit)       │
+└─────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+                              Final: 0.010s
+
+Total speedup: 15.335s → 0.010s = 1,534x faster!
 
 The Math:
-- 200 million cells in 0.011 seconds
-- = 18.2 billion cells/second
+- 200 million cells in 0.010 seconds
+- = 20 billion cells/second
 - = 64 cells per AVX-512 instruction
-- = 284 million SIMD instructions/second
+- = 312 million SIMD instructions/second
 
 What Made It Possible:
 1. 9800X3D's 96MB 3D V-Cache - entire working set fits in L3 cache
 2. AVX-512 - 64 cells processed per CPU instruction
 3. Mojo's zero-cost abstractions - no runtime overhead
 4. Algorithmic insight - sparse bounds + O(1) lookup
+5. 4x loop unrolling - reduces loop overhead, better instruction pipelining
 
-CPU now beats RTX 4070 GPU by 17x for this workload!
+CPU now beats RTX 4070 GPU by 18x for this workload!
+
+================================================================================
+GPU OPTIMIZATION ATTEMPT: O(1) Bitmask + Sparse Bounds
+================================================================================
+Date: 2025-12-03
+
+Applied same optimizations to GPU that made CPU fast:
+1. O(1) bitmask lookup (replaced 8-iteration loop)
+2. Sparse bounds (skip inactive cells outside pyramid)
+
+Results:
+┌────────────────────────────┬──────────┬──────────┬─────────┐
+│ Method                     │ Before   │ After    │ Change  │
+├────────────────────────────┼──────────┼──────────┼─────────┤
+│ Native GPU (no CPU alloc)  │ 0.177s   │ 0.166s   │ -6%     │
+└────────────────────────────┴──────────┴──────────┴─────────┘
+
+Why Only 6% Improvement?
+========================
+
+The bottleneck is KERNEL LAUNCH OVERHEAD, not per-cell computation:
+
+Time Breakdown:
+┌─────────────────────────────┬──────────┬──────────┬───────┐
+│ Component                   │ Before   │ After    │ % Tot │
+├─────────────────────────────┼──────────┼──────────┼───────┤
+│ Kernel launch overhead      │ ~150ms   │ ~150ms   │ 90%   │
+│ Per-cell compute            │ ~27ms    │ ~16ms    │ 10%   │
+├─────────────────────────────┼──────────┼──────────┼───────┤
+│ Total                       │ ~177ms   │ ~166ms   │ 100%  │
+└─────────────────────────────┴──────────┴──────────┴───────┘
+
+The Math:
+- 10,000 rows × 3 rules = 30,000 kernel launches
+- Each launch has ~5μs overhead (CUDA driver, dispatch)
+- 30,000 × 5μs = 150ms in launch overhead alone!
+
+Amdahl's Law:
+- We improved compute by ~40% (27ms → 16ms)
+- But compute was only 15% of total time
+- 40% × 15% = 6% total improvement
+
+Why CPU Doesn't Have This Problem:
+- No kernel launches (tight loop)
+- No driver overhead
+- All data in L3 cache (96MB)
+- AVX-512 processes 64 cells per instruction
+
+What Would Help GPU:
+1. Persistent kernels (launch once, loop internally)
+2. CUDA Graphs (pre-recorded kernel sequences)
+3. Grid-wide synchronization (process all rows in one kernel)
+4. Reduce from 30,000 launches to 3 launches
+
+Final Comparison:
+┌─────────────────────────────┬──────────┬─────────────────────┐
+│ Method                      │ Time     │ Cells/Second        │
+├─────────────────────────────┼──────────┼─────────────────────┤
+│ CPU (par grids / SIMD)      │ 0.010s   │ 20 billion          │
+│ GPU (optimized, no alloc)   │ 0.166s   │ 1.2 billion         │
+├─────────────────────────────┼──────────┼─────────────────────┤
+│ CPU is 16x faster           │          │                     │
+└─────────────────────────────┴──────────┴─────────────────────┘
+
+Lesson Learned:
+The GPU optimization did work (compute is faster), but we optimized the wrong
+bottleneck. For row-dependent cellular automata with 10K+ rows, kernel launch
+overhead dominates. The CPU wins because it avoids this overhead entirely and
+the 9800X3D's massive L3 cache keeps memory access fast.

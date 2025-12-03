@@ -101,7 +101,7 @@ fn compute_cell_value(
     allowed_patterns: LayoutTensor[cell_dtype, patterns_layout, MutAnyOrigin],
     code: Int,
 ) -> Int32:
-    """Determine if the pattern produces a live cell.
+    """Determine if the pattern produces a live cell (legacy O(8) version).
     
     Checks all 8 pattern slots. Unused slots contain -1, which never matches
     valid codes (0-7), so no explicit count is needed.
@@ -110,6 +110,16 @@ fn compute_cell_value(
         if Int(allowed_patterns[i]) == code:
             return 1
     return 0
+
+
+@always_inline
+fn compute_cell_value_fast(rule_mask: Int32, code: Int) -> Int32:
+    """O(1) bitmask lookup - determines if pattern produces a live cell.
+    
+    Uses the same bitmask optimization as CPU: (mask >> code) & 1
+    code is 0-7, mask bit at position code determines output.
+    """
+    return (rule_mask >> code) & 1
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -143,11 +153,48 @@ fn automaton_grid_kernel(
     allowed_patterns: LayoutTensor[cell_dtype, patterns_layout, MutAnyOrigin],
     row_idx: Int,
 ):
-    """GPU kernel to compute one row of the cellular automaton (full grid version)."""
+    """GPU kernel to compute one row of the cellular automaton (full grid version, legacy)."""
     var col = get_thread_col()
 
     if is_interior_cell(col):
         var neighborhood = get_neighborhood(grid, row_idx, col)
         var code = neighborhood.to_pattern_code()
         var result = compute_cell_value(allowed_patterns, code)
+        set_cell(grid, row_idx, col, result)
+
+
+fn automaton_grid_kernel_fast(
+    grid: LayoutTensor[cell_dtype, grid_layout, MutAnyOrigin],
+    rule_mask: Int32,
+    row_idx: Int,
+):
+    """GPU kernel with O(1) bitmask lookup (8x faster than legacy)."""
+    var col = get_thread_col()
+
+    if is_interior_cell(col):
+        var neighborhood = get_neighborhood(grid, row_idx, col)
+        var code = neighborhood.to_pattern_code()
+        var result = compute_cell_value_fast(rule_mask, code)
+        set_cell(grid, row_idx, col, result)
+
+
+fn automaton_grid_kernel_bounded(
+    grid: LayoutTensor[cell_dtype, grid_layout, MutAnyOrigin],
+    rule_mask: Int32,
+    row_idx: Int,
+    left_bound: Int,
+    right_bound: Int,
+):
+    """GPU kernel with O(1) bitmask AND sparse bounds optimization.
+    
+    Only processes cells within the active pyramid region, skipping
+    threads outside [left_bound, right_bound].
+    """
+    var col = get_thread_col()
+
+    # Skip threads outside active region (sparse bounds optimization)
+    if col >= left_bound and col <= right_bound and is_interior_cell(col):
+        var neighborhood = get_neighborhood(grid, row_idx, col)
+        var code = neighborhood.to_pattern_code()
+        var result = compute_cell_value_fast(rule_mask, code)
         set_cell(grid, row_idx, col, result)

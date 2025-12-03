@@ -35,6 +35,8 @@ from elementary.tests.test_gpu_methods import (
     test_native_gpu_executes_successfully,
     test_cupy_gpu_executes_successfully,
     test_pingpong_fallback_path_exists,
+    test_native_gpu_benchmark_optimized,
+    test_native_gpu_timing_reasonable,
 )
 
 from elementary.tests.test_rules import (
@@ -103,6 +105,8 @@ def main():
     suite.test[test_native_gpu_executes_successfully]()
     suite.test[test_cupy_gpu_executes_successfully]()
     suite.test[test_pingpong_fallback_path_exists]()
+    suite.test[test_native_gpu_benchmark_optimized]()
+    suite.test[test_native_gpu_timing_reasonable]()
     
     # Rule 30 tests
     suite.test[test_rule30_100_produces_1]()

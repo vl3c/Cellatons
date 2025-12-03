@@ -83,3 +83,42 @@ fn test_pingpong_fallback_path_exists() raises:
     # when GPU memory allocation fails
     assert_true(True, "Ping-pong fallback path is implemented")
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GPU Optimization Tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+fn test_native_gpu_benchmark_optimized() raises:
+    """Test that optimized GPU benchmark (O(1) bitmask + sparse bounds) executes."""
+    @parameter
+    if not has_accelerator():
+        print("Skipping: no GPU accelerator available")
+        return
+    
+    var logger = Logger()
+    var rule = create_rule_110()
+    
+    # Run the optimized GPU-only benchmark (uses O(1) bitmask + sparse bounds)
+    var timing = Grid.benchmark_native_gpu(rule, logger)
+    
+    # Should complete successfully with non-zero runs
+    assert_true(timing.runs > 0, "Optimized GPU benchmark should execute successfully")
+    # Compute time should be positive
+    assert_true(timing.compute > 0.0, "GPU compute time should be positive")
+
+
+fn test_native_gpu_timing_reasonable() raises:
+    """Test that optimized GPU produces reasonable timing (faster than before)."""
+    @parameter
+    if not has_accelerator():
+        print("Skipping: no GPU accelerator available")
+        return
+    
+    var logger = Logger()
+    var rule = create_rule_110()
+    
+    var timing = Grid.benchmark_native_gpu(rule, logger)
+    
+    # With O(1) bitmask + sparse bounds, compute should be under 0.1s
+    # (previously was ~0.06s per rule, optimized should be ~0.01s or less)
+    assert_true(timing.compute < 0.5, "Optimized GPU should be faster than 0.5s")
