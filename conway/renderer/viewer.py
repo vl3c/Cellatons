@@ -11,7 +11,7 @@ from ctypes import c_uint8, POINTER, cast
 from typing import Optional
 
 # UI Configuration
-FONT_NAME = "monospace"
+FONT_NAME = "sourcecodepro"  # Real monospace font (prevents text jiggle)
 FONT_SIZE = 36  # Main status text
 HINT_FONT_SIZE = 24  # Control hints
 FONT_BOLD = True
