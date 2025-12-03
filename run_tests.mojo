@@ -3,8 +3,10 @@
 Run with: pixi run mojo run_tests.mojo
 
 Imports and runs tests from elementary/tests/ modules.
+Also runs Python tests for the renderer module.
 """
 
+from python import Python
 from testing import TestSuite, assert_true, assert_equal, assert_false
 from shared.common import WIDTH, HEIGHT
 
@@ -141,3 +143,34 @@ def main():
     suite.test[test_all_rows_edges_are_0]()
     
     suite^.run()
+    
+    # Run Python renderer tests
+    print()
+    print("=" * 60)
+    print("RENDERER TESTS (Python)")
+    print("=" * 60)
+    run_python_renderer_tests()
+
+
+fn run_python_renderer_tests() raises:
+    """Run Python unittest tests for the renderer module."""
+    var sys = Python.import_module("sys")
+    sys.path.insert(0, "elementary/renderer")
+    sys.path.insert(0, "elementary/tests")
+    
+    var unittest = Python.import_module("unittest")
+    var test_viewer = Python.import_module("test_viewer")
+    
+    # Create test suite and run
+    var loader = unittest.TestLoader()
+    var suite = loader.loadTestsFromModule(test_viewer)
+    var runner = unittest.TextTestRunner(verbosity=2)
+    var result = runner.run(suite)
+    
+    # Check if all tests passed
+    var failures = Int(len(result.failures))
+    var errors = Int(len(result.errors))
+    if failures > 0 or errors > 0:
+        print("RENDERER TESTS FAILED:", failures, "failures,", errors, "errors")
+    else:
+        print("All renderer tests passed!")
