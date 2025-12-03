@@ -138,7 +138,7 @@ struct Grid(Copyable, Movable):
         self.logger.log("Completed generate_simd_cpu")
     
     fn _apply_rule_simd_row_fast(mut self, row: Int, mask: Int, left: Int, right: Int):
-        """Process row using fully vectorized SIMD operations."""
+        """Process row using fully vectorized SIMD operations with 4x loop unrolling."""
         var prev_offset = (row - 1) * self.width
         var curr_offset = row * self.width
         var bound_width = right - left + 1
@@ -147,13 +147,11 @@ struct Grid(Copyable, Movable):
         # Broadcast mask to SIMD vector once
         var mask_vec = SIMD[DType.int32, simd_width](mask)
         
-        # Process full SIMD chunks
-        var full_chunks = bound_width // simd_width
-        
-        for chunk in range(full_chunks):
-            var col = left + chunk * simd_width
-            
-            # Load neighbors (3 overlapping loads)
+        @always_inline
+        @parameter
+        fn process_chunk(col: Int):
+            """Process a single SIMD chunk of 64 cells."""
+            # Load 3 neighbors from previous row
             var l = (ptr + prev_offset + col - 1).load[width=simd_width]()
             var c = (ptr + prev_offset + col).load[width=simd_width]()
             var r = (ptr + prev_offset + col + 1).load[width=simd_width]()
@@ -161,11 +159,29 @@ struct Grid(Copyable, Movable):
             # Compute pattern codes: left*4 + center*2 + right
             var codes = l.cast[DType.int32]() * 4 + c.cast[DType.int32]() * 2 + r.cast[DType.int32]()
             
-            # PARALLEL bitmask lookup: (mask >> codes) & 1 for all 64 values at once!
+            # Parallel bitmask lookup: (mask >> codes) & 1 for all 64 values at once
             var results = ((mask_vec >> codes) & 1).cast[DType.uint8]()
             
-            # Store results
+            # Store results to current row
             (ptr + curr_offset + col).store(results)
+        
+        # Calculate chunks
+        var full_chunks = bound_width // simd_width
+        var unrolled_iterations = full_chunks // 4
+        
+        # 4x unrolled loop - processes 256 cells per iteration
+        # Reduces loop overhead and enables better instruction pipelining
+        for i in range(unrolled_iterations):
+            var base_col = left + i * 4 * simd_width
+            process_chunk(base_col)
+            process_chunk(base_col + simd_width)
+            process_chunk(base_col + 2 * simd_width)
+            process_chunk(base_col + 3 * simd_width)
+        
+        # Handle remaining full chunks (0-3 chunks)
+        var remaining_chunk_start = unrolled_iterations * 4
+        for chunk in range(remaining_chunk_start, full_chunks):
+            process_chunk(left + chunk * simd_width)
         
         # Process remaining cells with scalar bitmask (still O(1) per cell)
         var remaining_start = left + full_chunks * simd_width
