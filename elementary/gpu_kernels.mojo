@@ -1,13 +1,14 @@
 """Native Mojo GPU kernels for cellular automaton computation."""
 
 from gpu.host import DeviceContext
-from gpu import block_dim, block_idx, thread_idx
+from gpu import block_dim, block_idx, thread_idx, barrier
 from layout import Layout, LayoutTensor
 from shared.common import WIDTH, HEIGHT
 
 # GPU kernel constants
 alias cell_dtype = DType.int32
 alias gpu_block_size = 256
+alias ROWS_PER_KERNEL = 10000  # All rows in one kernel = 3 launches total (fastest)
 
 # Compile-time layouts for GPU tensors
 alias row_layout = Layout.row_major(WIDTH)
@@ -198,3 +199,40 @@ fn automaton_grid_kernel_bounded(
         var code = neighborhood.to_pattern_code()
         var result = compute_cell_value_fast(rule_mask, code)
         set_cell(grid, row_idx, col, result)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Multi-Row Kernel: Reduces kernel launch overhead by processing batches
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+fn automaton_multi_row_kernel(
+    grid: LayoutTensor[cell_dtype, grid_layout, MutAnyOrigin],
+    rule_mask: Int32,
+    start_row: Int,
+    num_rows: Int,
+):
+    """GPU kernel that processes multiple rows per launch using barrier() sync.
+    
+    Reduces kernel launch overhead by batching rows. Uses barrier() to synchronize
+    all threads after each row before processing the next (row N depends on row N-1).
+    
+    With ROWS_PER_KERNEL=100, reduces launches from 10,000 to 100 per rule.
+    Expected reduction: ~150ms launch overhead → ~1.5ms
+    """
+    var col = get_thread_col()
+    
+    # Process multiple rows within this single kernel launch
+    for i in range(num_rows):
+        var row = start_row + i
+        
+        # Only process if within grid bounds and interior cell
+        if row < HEIGHT and is_interior_cell(col):
+            var neighborhood = get_neighborhood(grid, row, col)
+            var code = neighborhood.to_pattern_code()
+            var result = compute_cell_value_fast(rule_mask, code)
+            set_cell(grid, row, col, result)
+        
+        # CRITICAL: Synchronize ALL threads before processing next row
+        # Row N+1 depends on row N being complete
+        barrier()

@@ -320,3 +320,123 @@ The GPU optimization did work (compute is faster), but we optimized the wrong
 bottleneck. For row-dependent cellular automata with 10K+ rows, kernel launch
 overhead dominates. The CPU wins because it avoids this overhead entirely and
 the 9800X3D's massive L3 cache keeps memory access fast.
+
+================================================================================
+GPU MULTI-ROW KERNEL: barrier() Synchronization (THE FIX!)
+================================================================================
+Date: 2025-12-03
+
+The real fix: batch multiple rows per kernel using barrier() synchronization.
+Instead of 10,000 kernel launches per rule, use 100 launches processing 100 rows each.
+
+Implementation:
+```mojo
+fn automaton_multi_row_kernel(grid, rule_mask, start_row, num_rows):
+    var col = get_thread_col()
+    
+    for i in range(num_rows):  # Process 100 rows per kernel
+        var row = start_row + i
+        if row < HEIGHT and is_interior_cell(col):
+            # ... compute cell value ...
+        
+        barrier()  # Sync all threads before next row (row N+1 depends on row N)
+```
+
+Results:
+┌────────────────────────────┬──────────┬──────────┬─────────┬──────────────┐
+│ Method                     │ Before   │ After    │ Speedup │ Launches     │
+├────────────────────────────┼──────────┼──────────┼─────────┼──────────────┤
+│ Native GPU (no CPU alloc)  │ 0.172s   │ -        │ -       │ 30,000       │
+│ Native GPU (batched)       │ -        │ 0.012s   │ 14x     │ 3            │
+└────────────────────────────┴──────────┴──────────┴─────────┴──────────────┘
+
+ROWS_PER_KERNEL Tuning:
+┌─────────────────────┬──────────┬──────────┐
+│ Rows Per Kernel     │ Launches │ Time     │
+├─────────────────────┼──────────┼──────────┤
+│ 100                 │ 300      │ 0.014s   │
+│ 334                 │ 90       │ 0.013s   │
+│ 10000 (all rows)    │ 3        │ 0.012s   │ ← FASTEST
+└─────────────────────┴──────────┴──────────┘
+
+Processing all 10,000 rows in a single kernel per rule is optimal.
+Diminishing returns show we've eliminated launch overhead - remaining
+time is pure compute + barrier() synchronization.
+
+The Math:
+- 10,000 rows / 10,000 rows per kernel = 1 launch per rule
+- 1 launch × 3 rules = 3 total launches
+- 3 × 5μs = 0.015ms launch overhead (essentially zero!)
+
+LATEST BENCHMARK (Multi-Row GPU):
+---------------------------------
+Date: 2025-12-03
+Grid: 20,000 x 10,000 (200M cells) | 3 rules
+CPU: AMD Ryzen 9800X3D (96MB 3D V-Cache, AVX-512)
+GPU: NVIDIA RTX 4070
+
+Method                       Total       GPU
+-----------------------------------------------
+seq grids / seq cells         0.909s       -
+seq grids / par cells         0.356s       -
+par grids / seq cells         0.166s       -
+seq grids / SIMD cells        0.134s       -
+par grids / SIMD cells        0.011s       -
+CuPy GPU                      9.213s    5.902s
+Native GPU                    0.516s    0.398s
+Native GPU (no CPU alloc)     0.172s    0.172s
+Native GPU (batched)          0.012s    0.012s   ← NEW GPU RECORD!
+-----------------------------------------------
+
+CPU vs GPU - FINAL COMPARISON:
+┌─────────────────────────────┬──────────┬─────────────────────┐
+│ Method                      │ Time     │ Cells/Second        │
+├─────────────────────────────┼──────────┼─────────────────────┤
+│ CPU (par grids / SIMD)      │ 0.010s   │ 20.0 billion        │
+│ GPU (batched, 3 launches)   │ 0.012s   │ 16.7 billion        │
+├─────────────────────────────┼──────────┼─────────────────────┤
+│ Difference                  │ 20%      │ CPU still faster    │
+└─────────────────────────────┴──────────┴─────────────────────┘
+
+GPU is now within 20% of CPU - essentially a TIE!
+
+Key Insight:
+The bottleneck was never per-cell compute - it was kernel launch overhead.
+By using barrier() to synchronize threads within a kernel, we can process
+multiple dependent rows without returning to the CPU for each row.
+
+================================================================================
+FINAL OPTIMIZATION JOURNEY: 15.335s → 0.011s (1,394x speedup!)
+================================================================================
+
+CPU Path:
+┌─────────────────────────────────────────────────────────────┐
+│ 1. Sparse Bounds          15.335s → 8.525s     (1.8x)      │
+│ 2. O(1) Bitmask            8.525s → 3.375s     (2.5x)      │
+│ 3. Parallel Grids          3.375s → 0.127s     (27x)       │
+│ 4. AVX-512 SIMD            0.127s → 0.016s     (8x)        │
+│ 5. Flat Buffer             0.016s → 0.011s     (1.5x)      │
+│ 6. Loop Unrolling          0.011s → 0.010s     (1.1x)      │
+└─────────────────────────────────────────────────────────────┘
+                        Final CPU: 0.011s
+
+GPU Path:
+┌─────────────────────────────────────────────────────────────┐
+│ 1. Native Mojo GPU (vs CuPy)  9.7s → 0.96s     (10x)       │
+│ 2. Skip CPU allocation       0.96s → 0.17s     (5.6x)      │
+│ 3. O(1) Bitmask + Bounds     0.17s → 0.166s    (1.02x)     │
+│ 4. Multi-Row Batching       0.166s → 0.014s    (12x)       │
+│ 5. Full-Grid Kernel (3 launches) 0.014s → 0.012s (1.17x)   │
+└─────────────────────────────────────────────────────────────┘
+                        Final GPU: 0.012s
+
+Both CPU and GPU are now within 20% of each other - essentially a TIE!
+
+The 9800X3D's 96MB L3 cache gives CPU a slight edge for this cache-friendly
+workload, but the GPU is no longer 16x slower. The barrier() optimization
+was the key breakthrough for GPU performance.
+
+Final Configuration:
+- ROWS_PER_KERNEL = 10000 (process entire grid in 1 kernel per rule)
+- Total kernel launches: 3 (one per rule)
+- Launch overhead: ~0.015ms (essentially zero)

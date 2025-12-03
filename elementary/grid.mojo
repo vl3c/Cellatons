@@ -19,10 +19,12 @@ from elementary.gpu_kernels import (
     row_layout,
     max_patterns,
     patterns_layout,
+    ROWS_PER_KERNEL,
     init_center_kernel,
     automaton_grid_kernel,
     automaton_grid_kernel_fast,
     automaton_grid_kernel_bounded,
+    automaton_multi_row_kernel,
     automaton_row_kernel,
 )
 
@@ -585,6 +587,94 @@ struct Grid(Copyable, Movable):
         
         # Single sync after all kernels are enqueued
         ctx.synchronize()
+        
+        var compute_end = py_time.time()
+        var compute_duration = Float64(py_operator.sub(compute_end, compute_start))
+        
+        var total_end = py_time.time()
+        var total_duration = Float64(py_operator.sub(total_end, prep_start))
+        var transfer_duration: Float64 = 0.0  # No transfer in GPU-only mode
+        
+        return GPUTimingResult(prep_duration, compute_duration, transfer_duration, total_duration, 1)
+
+    @staticmethod
+    fn benchmark_native_gpu_multirow(rule: Rule, logger: Logger) raises -> GPUTimingResult:
+        """Benchmark native GPU with multi-row batching (reduces kernel launch overhead).
+        
+        Uses automaton_multi_row_kernel which processes ROWS_PER_KERNEL rows per launch,
+        reducing total launches from 10,000 to ~100 per rule.
+        
+        Expected improvement: ~150ms launch overhead → ~1.5ms
+        """
+        var py_time = Python.import_module("time")
+        var py_builtins = Python.import_module("builtins")
+        var py_operator = Python.import_module("operator")
+        
+        @parameter
+        if not has_accelerator():
+            logger.log("No GPU accelerator detected")
+            print("No GPU accelerator available for benchmark")
+            return GPUTimingResult(0.0, 0.0, 0.0, 0.0, 0)
+        
+        logger.log("Starting GPU multi-row benchmark (batched kernel launches)")
+        logger.log_int("Rows per kernel:", ROWS_PER_KERNEL)
+        var prep_start = py_time.time()
+        
+        # Get bitmask from rule
+        var rule_mask = Int32(rule.pattern_mask)
+        logger.log_int("Using O(1) bitmask, rule_mask:", rule.pattern_mask)
+        
+        # Create device context
+        logger.log("Creating GPU device context")
+        var ctx = DeviceContext()
+        
+        # Allocate grid buffer
+        logger.log_int("Allocating device grid buffer, size:", grid_size)
+        var dev_grid = ctx.enqueue_create_buffer[cell_dtype](grid_size)
+        logger.log("Synchronizing allocation")
+        ctx.synchronize()
+        logger.log("GPU allocation successful")
+        
+        # Create tensor view for the grid
+        var grid_tensor = LayoutTensor[cell_dtype, grid_layout](dev_grid)
+        
+        var prep_end = py_time.time()
+        var prep_duration = Float64(py_operator.sub(prep_end, prep_start))
+        
+        var compute_start = py_time.time()
+        
+        # Calculate grid dimensions for kernel launch
+        var num_blocks = Grid._get_num_blocks()
+        
+        # First, set the initial cell (run init kernel with 1 thread)
+        ctx.enqueue_function_checked[init_center_kernel, init_center_kernel](
+            grid_tensor,
+            grid_dim=1,
+            block_dim=1,
+        )
+        
+        # Process rows in batches using multi-row kernel
+        # This reduces ~10,000 launches to ~100 launches
+        var row = 1
+        var total_launches = 0
+        while row < HEIGHT:
+            var batch_size = min(ROWS_PER_KERNEL, HEIGHT - row)
+            
+            ctx.enqueue_function_checked[automaton_multi_row_kernel, automaton_multi_row_kernel](
+                grid_tensor,
+                rule_mask,
+                row,
+                batch_size,
+                grid_dim=num_blocks,
+                block_dim=gpu_block_size,
+            )
+            
+            row += batch_size
+            total_launches += 1
+        
+        # Single sync after all kernels are enqueued
+        ctx.synchronize()
+        logger.log_int("Total kernel launches:", total_launches)
         
         var compute_end = py_time.time()
         var compute_duration = Float64(py_operator.sub(compute_end, compute_start))

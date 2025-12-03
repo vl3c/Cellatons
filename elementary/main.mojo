@@ -99,6 +99,14 @@ fn main() raises:
         g8 += stats.total
     bench.add_gpu("Native GPU (no CPU alloc)", py_time.time() - start8, g8)
     
+    # 9. Native GPU (multi-row batching - reduced kernel launches)
+    var g9: Float64 = 0.0
+    var start9 = py_time.time()
+    for rule in rule_container.rules:
+        var stats = Grid.benchmark_native_gpu_multirow(rule, logger)
+        g9 += stats.total
+    bench.add_gpu("Native GPU (batched)", py_time.time() - start9, g9)
+    
     # Render if enabled (using fastest method: par grids / SIMD cells)
     if RENDER_PNGS:
         var renderer = Renderer()
