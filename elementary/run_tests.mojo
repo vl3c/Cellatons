@@ -1,6 +1,6 @@
 """Test runner for elementary cellular automaton tests.
 
-Run with: pixi run mojo run_tests.mojo
+Run with: pixi run mojo elementary/run_tests.mojo
 
 Imports and runs tests from elementary/tests/ modules.
 Also runs Python tests for the renderer module.

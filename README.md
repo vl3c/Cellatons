@@ -70,6 +70,7 @@ Classic 2D simultaneous-update automaton with real-time pygame visualization at 
 │   │   ├── base.mojo            # Renderer configuration
 │   │   ├── python_module.mojo   # Mojo-Python bridge
 │   │   └── viewer.py            # Python-side rendering
+│   ├── run_tests.mojo           # Elementary test runner (Mojo + Python)
 │   └── tests/                   # 40+ unit tests
 │
 ├── conway/                      # Conway's Game of Life
@@ -91,7 +92,6 @@ Classic 2D simultaneous-update automaton with real-time pygame visualization at 
 │   └── tests/                   # 70+ unit tests
 │
 ├── generated/                   # PNG outputs
-├── run_tests.mojo               # Master test runner
 ├── pixi.toml / pixi.lock        # Environment definition
 └── README.md
 ```
@@ -150,7 +150,7 @@ wsl -e bash -lc "cd /mnt/c/Path/To/Cellatons && pixi run mojo voxel/main.mojo"
 
 ```bash
 # All elementary tests + renderer tests
-pixi run mojo run_tests.mojo
+pixi run mojo elementary/run_tests.mojo
 
 # Conway's Game of Life tests
 pixi run mojo conway/run_tests.mojo
