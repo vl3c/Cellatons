@@ -6,7 +6,6 @@ from algorithm import parallelize
 from shared.common import WIDTH, HEIGHT, RENDER_PNGS
 from shared.benchmark import BenchmarkSuite
 from shared.logger import Logger
-from row.renderer import Renderer
 
 
 fn main() raises:
@@ -108,7 +107,9 @@ fn main() raises:
     bench.add_gpu("Native GPU (batched)", py_time.time() - start9, g9)
     
     # Render if enabled (using fastest method: par grids / SIMD cells)
+    @parameter
     if RENDER_PNGS:
+        from row.renderer import Renderer
         var renderer = Renderer()
         renderer.save_pngs(grids5a, rule_container)
     

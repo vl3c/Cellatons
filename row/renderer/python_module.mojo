@@ -6,54 +6,22 @@ This approach minimizes Python interop overhead by keeping render logic in Pytho
 Expected performance: ~5-10ms per frame (~100-200 FPS).
 """
 
-from python import Python, PythonObject
 from shared.common import WIDTH, HEIGHT
+from shared.renderer.python_module import PythonModuleBridge
 from row.renderer.base import RendererConfig
 
 
 struct PythonModuleRenderer:
-    """Renders by delegating to Python viewer.py module.
-    
-    The grid data stays in Mojo memory - Python receives a pointer
-    and creates a zero-copy numpy view over it.
-    """
+    """Renders by delegating to Python viewer.py module."""
     var config: RendererConfig
-    var viewer: PythonObject
-    var grid_np: PythonObject
-    var initialized: Bool
+    var bridge: PythonModuleBridge
     
     fn __init__(out self, var config: RendererConfig) raises:
         self.config = config^
-        self.viewer = Self._import_viewer()
-        self.grid_np = Python.none()
-        self.initialized = False
-    
-    @staticmethod
-    fn _import_viewer() raises -> PythonObject:
-        """Import the Python viewer module."""
-        var sys = Python.import_module("sys")
-        sys.path.append("row/renderer")
-        return Python.import_module("viewer")
+        self.bridge = PythonModuleBridge("row/renderer", WIDTH, HEIGHT)
     
     fn name(self) -> String:
         return "python_module"
-    
-    fn _ensure_grid_view(
-        mut self,
-        grid_ptr: UnsafePointer[UInt8],
-        grid_stride: Int,
-    ) raises:
-        """Initialize numpy view over grid buffer (lazy, called once)."""
-        if self.initialized:
-            return
-        
-        self.grid_np = self.viewer.create_grid_view(
-            Int(grid_ptr),
-            grid_stride,
-            HEIGHT,
-            WIDTH
-        )
-        self.initialized = True
     
     fn render_window(
         mut self, 
@@ -63,21 +31,13 @@ struct PythonModuleRenderer:
         progress: Int = 0,
         fps: Int = 0,
     ) raises:
-        """Render visible window with status overlay.
+        """Render visible window with status overlay."""
+        var grid_np = self.bridge.ensure_grid_view(Int(grid_ptr), grid_stride)
         
-        Args:
-            grid_ptr: Pointer to grid cell data
-            grid_stride: Row stride (aligned width)
-            start_row: First visible row (scroll position)
-            progress: Playback progress percentage (0-100)
-            fps: Current frames per second
-        """
-        self._ensure_grid_view(grid_ptr, grid_stride)
-        
-        self.viewer.render_window(
+        self.bridge.get_viewer().render_window(
             self.config.pygame,
             self.config.screen,
-            self.grid_np,
+            grid_np,
             start_row,
             self.config.display_width,
             self.config.display_height,
