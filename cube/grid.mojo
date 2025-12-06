@@ -8,6 +8,15 @@ for this GPU-only project.
 from python import Python
 from sys import has_accelerator
 from memory import UnsafePointer
+from shared.grid_base import (
+    DEFAULT_SIMD_WIDTH,
+    active_ptr,
+    alloc_zeroed,
+    buffer_size_3d,
+    calc_stride,
+    compute_layer_stride,
+    swap_active,
+)
 
 # Grid dimensions (cubic volume)
 alias cube_WIDTH: Int = 96
@@ -16,7 +25,7 @@ alias cube_DEPTH: Int = 96
 alias INITIAL_DENSITY: Float64 = 0.20
 
 # SIMD configuration (alignment)
-alias simd_width = 64
+alias simd_width = DEFAULT_SIMD_WIDTH
 
 
 struct Grid(Movable):
@@ -37,16 +46,12 @@ struct Grid(Movable):
         self.depth = cube_DEPTH
         self.active = 0
         
-        self.stride = ((self.width + simd_width - 1) // simd_width) * simd_width
-        self.layer_stride = self.stride * self.height
+        self.stride = calc_stride(self.width, simd_width)
+        self.layer_stride = compute_layer_stride(self.stride, self.height)
         
-        var buffer_size = self.layer_stride * self.depth + simd_width
-        self.cells_a = List[UInt8](capacity=buffer_size)
-        self.cells_b = List[UInt8](capacity=buffer_size)
-        
-        for _ in range(buffer_size):
-            self.cells_a.append(0)
-            self.cells_b.append(0)
+        var buffer_size = buffer_size_3d(self.stride, self.height, self.depth, simd_width)
+        self.cells_a = alloc_zeroed(buffer_size)
+        self.cells_b = alloc_zeroed(buffer_size)
     
     fn __moveinit__(out self, deinit existing: Self):
         self.cells_a = existing.cells_a^
@@ -109,13 +114,11 @@ struct Grid(Movable):
     
     fn swap_buffers(mut self):
         """Swap active and inactive buffers."""
-        self.active = 1 - self.active
+        self.active = swap_active(self.active)
     
     fn get_active_cells_ptr(mut self) -> Int:
         """Get integer pointer value to active buffer for rendering."""
-        if self.active == 0:
-            return Int(self.cells_a.unsafe_ptr())
-        return Int(self.cells_b.unsafe_ptr())
+        return active_ptr(self.active, self.cells_a, self.cells_b)
     
     fn randomize(mut self, density: Float64) raises:
         """Initialize grid with random live cells."""

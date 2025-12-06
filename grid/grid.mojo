@@ -10,12 +10,20 @@ from python import Python, PythonObject
 from sys import has_accelerator
 from memory import UnsafePointer
 from shared.display import DISPLAY_WIDTH, DISPLAY_HEIGHT
+from shared.grid_base import (
+    DEFAULT_SIMD_WIDTH,
+    active_ptr,
+    alloc_zeroed,
+    buffer_size_2d,
+    calc_stride,
+    swap_active,
+)
 
 # Grid dimensions for 1440p fullscreen
 alias INITIAL_DENSITY: Float64 = 0.15
 
 # SIMD configuration (AVX-512: 64 bytes = 64 cells)
-alias simd_width = 64
+alias simd_width = DEFAULT_SIMD_WIDTH
 
 
 struct Grid(Movable):
@@ -43,18 +51,13 @@ struct Grid(Movable):
         self.height = height
         self.active = 0
         
-        # Align stride to 64 bytes for AVX-512
-        self.stride = ((width + simd_width - 1) // simd_width) * simd_width
+        # Align stride to SIMD width
+        self.stride = calc_stride(width, simd_width)
         
-        # Allocate both buffers
-        var buffer_size = self.stride * height + simd_width  # Extra padding
-        self.cells_a = List[UInt8](capacity=buffer_size)
-        self.cells_b = List[UInt8](capacity=buffer_size)
-        
-        # Zero-initialize
-        for _ in range(buffer_size):
-            self.cells_a.append(0)
-            self.cells_b.append(0)
+        # Allocate zeroed buffers with padding
+        var buffer_size = buffer_size_2d(self.stride, height, simd_width)
+        self.cells_a = alloc_zeroed(buffer_size)
+        self.cells_b = alloc_zeroed(buffer_size)
     
     fn __moveinit__(out self, deinit existing: Self):
         """Move constructor."""
@@ -136,7 +139,7 @@ struct Grid(Movable):
     
     fn swap_buffers(mut self):
         """Swap active and inactive buffers."""
-        self.active = 1 - self.active
+        self.active = swap_active(self.active)
     
     fn get_active_cells_ptr(mut self) -> Int:
         """Get integer pointer value to active buffer for rendering.
@@ -144,10 +147,7 @@ struct Grid(Movable):
         Returns raw pointer value to avoid UnsafePointer origin issues.
         Caller should use this with ctypes in Python for numpy view.
         """
-        if self.active == 0:
-            return Int(self.cells_a.unsafe_ptr())
-        else:
-            return Int(self.cells_b.unsafe_ptr())
+        return active_ptr(self.active, self.cells_a, self.cells_b)
     
     # ─────────────────────────────────────────────────────────────────────────
     # Initialization Methods
