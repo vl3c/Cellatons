@@ -1,6 +1,6 @@
 # Cellatons — Cellular Automata in Mojo 🔥
 
-High-performance cellular automata implementations in [Mojo](https://www.modular.com/mojo), featuring CPU (SIMD-vectorized) and native GPU execution paths. Three sub-projects cover 1D, 2D, and 3D automata with real-time visualization and comprehensive benchmarking.
+High-performance cellular automata implementations in [Mojo](https://www.modular.com/mojo), featuring CPU (SIMD-vectorized) and native GPU execution paths. Four sub-projects cover 1D, 2D, 3D, and 4D automata with real-time visualization and comprehensive benchmarking.
 
 ## Sub-Projects
 
@@ -12,6 +12,9 @@ Classic 2D simultaneous-update automaton with real-time pygame visualization at 
 
 ### 3. Cube Automaton (3D, GPU-only)
 26-neighbor 3D cellular automaton (B6/S567) running on native GPU kernels. Renders a rotating voxel cube with a transparent gray grid on black background.
+
+### 4. Hypercube Automaton (4D, GPU-only)
+80-neighbor 4D extension of the cube rule (B6/S567) over W×Z×Y×X (default 32×32×32×32). GPU-only with multiple render modes: single W slice, max-intensity projection, tiled slices, and render-off; modes cycle with a toggle key.
 
 ---
 
@@ -145,6 +148,12 @@ pixi run mojo cube/main.mojo
 ```
 Controls: `SPACE` — Pause/Resume, `R` — Reset, `Q`/`ESC` — Quit
 
+### 8. Run hypercube Automaton (4D, GPU-only)
+```bash
+pixi run mojo hypercube/main.mojo
+```
+Controls: `SPACE` — Pause/Resume, `R` — Reset, `T` — Cycle render mode (Slice → Max → Tiled → Off), `[` / `]` — Move W slice (Slice mode), `Q`/`ESC` — Quit
+
 **Windows (WSL2) one-liner** — run inside WSL, pointing to your repo:
 ```bash
 wsl -e bash -lc "cd /mnt/c/Path/To/Cellatons && pixi run mojo cube/main.mojo"
@@ -163,6 +172,9 @@ pixi run mojo grid/run_tests.mojo
 
 # Cube automaton tests
 pixi run mojo cube/run_tests.mojo
+
+# Hypercube automaton tests (GPU not required for grid checks)
+pixi run mojo hypercube/run_tests.mojo
 ```
 
 ---
