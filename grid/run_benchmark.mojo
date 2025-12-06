@@ -10,12 +10,13 @@ from python import Python, PythonObject
 from sys import has_accelerator
 from grid.grid import Grid, INITIAL_DENSITY
 from grid.cpu_compute import CPUCompute
-from grid.benchmark import (
+from shared.benchmarking import (
     BenchmarkStats,
     BenchmarkResult,
     print_detailed_report,
     save_detailed_report,
 )
+from shared.benchmarking.report import _format_sec3, _format_int
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Constants
@@ -39,8 +40,6 @@ fn _run_cpu_benchmark(mut grid: Grid, py_time: PythonObject) raises -> Benchmark
     
     print("Running CPU benchmark (", NUM_GENERATIONS, "generations)...")
     
-    var total_start = py_time.time()
-    
     for gen in range(NUM_GENERATIONS):
         var gen_start = py_time.time()
         CPUCompute.step(grid)
@@ -50,7 +49,7 @@ fn _run_cpu_benchmark(mut grid: Grid, py_time: PythonObject) raises -> Benchmark
         if (gen + 1) % 1000 == 0:
             print("  CPU:", gen + 1, "/", NUM_GENERATIONS, "generations")
     
-    _print_benchmark_complete("CPU", py_time.time() - total_start)
+    _print_benchmark_complete_stats("CPU", stats)
     return stats^
 
 
@@ -66,8 +65,6 @@ fn _run_gpu_benchmark(mut grid: Grid, py_time: PythonObject) raises -> Benchmark
     var src_ptr = grid.cells_a.unsafe_ptr() if grid.active == 0 else grid.cells_b.unsafe_ptr()
     gpu_compute.upload_from_cpu(src_ptr, grid.active)
     
-    var total_start = py_time.time()
-    
     for gen in range(NUM_GENERATIONS):
         var gen_start = py_time.time()
         gpu_compute.step()
@@ -77,17 +74,18 @@ fn _run_gpu_benchmark(mut grid: Grid, py_time: PythonObject) raises -> Benchmark
         if (gen + 1) % 1000 == 0:
             print("  GPU:", gen + 1, "/", NUM_GENERATIONS, "generations")
     
-    _print_benchmark_complete("GPU", py_time.time() - total_start)
+    _print_benchmark_complete_stats("GPU", stats)
     return stats^
 
 
-fn _print_benchmark_complete(mode: String, total_time: PythonObject) raises:
-    """Print benchmark completion message."""
-    var time_secs = Float64(total_time)
-    var gens_per_sec = Float64(NUM_GENERATIONS) / time_secs
+fn _print_benchmark_complete_stats(mode: String, stats: BenchmarkStats) raises:
+    """Print benchmark completion message based on collected stats."""
+    var total_ms = stats.avg() * Float64(stats.count())
+    var time_secs = total_ms / 1000.0
+    var gens_per_sec = Float64(stats.count()) / time_secs if time_secs > 0 else 0.0
     print(mode, "benchmark complete:")
-    print("  Total time:", time_secs, "seconds")
-    print("  Generations/sec:", gens_per_sec)
+    print("  Total time:", _format_sec3(time_secs), "seconds")
+    print("  Generations/sec:", _format_int(gens_per_sec))
     print()
 
 
@@ -121,7 +119,7 @@ fn run_benchmark() raises:
 fn _print_banner() raises:
     """Print benchmark startup banner."""
     print("=" * 70)
-    print("Grid Game of Life - PERFORMANCE BENCHMARK")
+    print("Grid Automata - PERFORMANCE BENCHMARK")
     print("=" * 70)
     print()
     print("Grid:", BENCH_WIDTH, "x", BENCH_HEIGHT, "(", BENCH_WIDTH * BENCH_HEIGHT, "cells)")

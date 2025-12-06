@@ -1,42 +1,43 @@
+
 ======================================================================
-Grid Game of Life - BENCHMARK REPORT
+Grid Automata - BENCHMARK REPORT
 ======================================================================
 
-Timestamp: 2025-12-04T00:48:38.029703
+Timestamp: 2025-12-06T18:17:56.148692
 
 Configuration:
   Grid size: 3840 x 2160
   Total cells: 8294400
   Generations: 10000
-  Initial density: 15%
+  Initial density: 15 %
 
 ----------------------------------------------------------------------
 CPU Results (SIMD + Parallel Rows):
 ----------------------------------------------------------------------
   Samples: 10000
-  Average: 3.5133538961410524 ms/generation
-  Minimum: 2.0170211791992188 ms/generation
-  Maximum: 7.661581039428711 ms/generation
-  Std Dev: 0.8244623079457593 ms
-  Total time: 35.13353896141052 seconds
-  Throughput: 284.6283151544642 generations/second
+  Average: 3.693 ms per generation
+  Minimum: 2.030 ms per generation
+  Maximum: 10.137 ms per generation
+  Std Dev: 0.710 ms
+  Total time: 36.931 seconds
+  Throughput: 270 generations/second
 
 ----------------------------------------------------------------------
 GPU Results (Native GPU Kernel):
 ----------------------------------------------------------------------
   Samples: 10000
-  Average: 0.06897261142730712 ms/generation
-  Minimum: 0.0016689300537109375 ms/generation
-  Maximum: 0.7579326629638672 ms/generation
-  Std Dev: 0.06687747222470002 ms
-  Total time: 0.6897261142730713 seconds
-  Throughput: 14498.50860082249 generations/second
+  Average: 0.068 ms per generation
+  Minimum: 0.001 ms per generation
+  Maximum: 0.704 ms per generation
+  Std Dev: 0.048 ms
+  Total time: 0.678 seconds
+  Throughput: 14748 generations/second
 
 ----------------------------------------------------------------------
 Comparison:
 ----------------------------------------------------------------------
-  GPU is 50.93839168093426x faster than CPU
-  CPU throughput: 2360.821097217188 M cells/second
-  GPU throughput: 120256.42973866206 M cells/second
+  GPU is 54.47 x faster than CPU
+  CPU throughput: 2245 M cells/second
+  GPU throughput: 122328 M cells/second
 
 ======================================================================

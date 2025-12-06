@@ -7,9 +7,9 @@
 # - result.mojo: BenchmarkResult struct for complete benchmark data
 # - report.mojo: Functions for printing and saving reports
 
-from .stats import BenchmarkStats
-from .result import BenchmarkResult
-from .report import (
+from shared.benchmarking import (
+    BenchmarkStats,
+    BenchmarkResult,
     print_benchmark_summary,
     print_detailed_report,
     save_benchmark_results,

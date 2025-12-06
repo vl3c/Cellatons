@@ -1,7 +1,7 @@
 """Tests for benchmark utilities."""
 
 from testing import assert_true, assert_equal
-from grid.benchmark import BenchmarkStats, BenchmarkResult
+from shared.benchmarking import BenchmarkStats, BenchmarkResult
 
 
 # ─────────────────────────────────────────────────────────────────────────────

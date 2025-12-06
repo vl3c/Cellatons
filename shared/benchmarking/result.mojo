@@ -1,6 +1,6 @@
-"""Benchmark result container for storing complete benchmark data."""
+"""Benchmark result container for storing complete benchmark data (shared)."""
 
-from grid.benchmark.stats import BenchmarkStats
+from shared.benchmarking.stats import BenchmarkStats
 
 
 struct BenchmarkResult:
@@ -118,3 +118,4 @@ struct BenchmarkResult:
         if self.frame_stats.count() == 0 or self.frame_stats.avg() <= 0:
             return 0.0
         return 1000.0 / self.frame_stats.avg()
+

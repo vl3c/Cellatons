@@ -23,7 +23,7 @@ from grid.grid import Grid, DISPLAY_WIDTH, DISPLAY_HEIGHT, INITIAL_DENSITY
 from grid.cpu_compute import CPUCompute
 from shared.renderer.base import RendererConfig, init_display
 from grid.renderer import PythonModuleRenderer
-from grid.benchmark import BenchmarkStats, BenchmarkResult, print_benchmark_summary
+from shared.benchmarking import BenchmarkStats, BenchmarkResult, print_benchmark_summary
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Constants

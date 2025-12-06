@@ -1,4 +1,4 @@
-"""Benchmark statistics collection for timing measurements."""
+"""Benchmark statistics collection for timing measurements (shared)."""
 
 
 struct BenchmarkStats(Movable):

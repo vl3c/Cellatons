@@ -1,8 +1,8 @@
 """Benchmark reporting utilities for console and file output."""
 
 from python import Python, PythonObject
-from grid.benchmark.stats import BenchmarkStats
-from grid.benchmark.result import BenchmarkResult
+from shared.benchmarking.stats import BenchmarkStats
+from shared.benchmarking.result import BenchmarkResult
 
 
 # ─────────────────────────────────────────────────────────────────────────────
