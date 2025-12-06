@@ -33,7 +33,7 @@ from cube.tests.test_gpu import (
 
 def main():
     print("=" * 60)
-    print("cube AUTOMATON TEST SUITE")
+    print("Cube Automata TEST SUITE")
     print("=" * 60)
     print()
     

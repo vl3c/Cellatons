@@ -76,7 +76,7 @@ from row.tests.test_edge_cases import (
 
 def main():
     print("=" * 60)
-    print("row CELLULAR AUTOMATON TEST SUITE")
+    print("Row Automata TEST SUITE")
     print("=" * 60)
     print("Grid dimensions:", WIDTH, "x", HEIGHT)
     print()

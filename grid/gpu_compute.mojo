@@ -1,11 +1,10 @@
-"""Persistent GPU compute handler for Grid Game of Life.
-
-Keeps GPU buffers allocated across frames to avoid per-frame allocation overhead.
-"""
+"""Persistent GPU compute handler for Grid Automata."""
 
 from sys import has_accelerator
-from gpu.host import DeviceContext, DeviceBuffer, HostBuffer
+from gpu.host import DeviceContext, DeviceBuffer
 from layout import Layout, LayoutTensor
+from memory import UnsafePointer
+from shared.gpu_pingpong import PingPongGPU2D
 from grid.gpu_kernels import grid_generation_kernel, get_kernel_dims
 from grid.grid import DISPLAY_WIDTH, DISPLAY_HEIGHT
 
@@ -19,11 +18,7 @@ struct GPUCompute:
     Allocates GPU buffers once and reuses them across frames.
     Uses double-buffering on GPU side for ping-pong computation.
     """
-    var ctx: DeviceContext
-    var dev_grid_a: DeviceBuffer[DType.uint8]
-    var dev_grid_b: DeviceBuffer[DType.uint8]
-    var host_buffer: HostBuffer[DType.uint8]
-    var grid_size: Int
+    var pingpong: PingPongGPU2D
     var width: Int
     var height: Int
     var stride: Int
@@ -31,65 +26,32 @@ struct GPUCompute:
     var needs_upload: Bool  # True if CPU state needs to be uploaded
     
     fn __init__(out self, width: Int, height: Int, stride: Int) raises:
-        """Initialize GPU resources.
-        
-        Args:
-            width: Grid width
-            height: Grid height
-            stride: Row stride (aligned for SIMD)
-        """
         self.width = width
         self.height = height
         self.stride = stride
-        self.grid_size = stride * height
-        self.gpu_active = 0
-        self.needs_upload = True
-        
-        # Create device context
-        self.ctx = DeviceContext()
-        
-        # Allocate persistent device buffers
-        self.dev_grid_a = self.ctx.enqueue_create_buffer[DType.uint8](self.grid_size)
-        self.dev_grid_b = self.ctx.enqueue_create_buffer[DType.uint8](self.grid_size)
-        self.host_buffer = self.ctx.enqueue_create_host_buffer[DType.uint8](self.grid_size)
-        self.ctx.synchronize()
+        self.pingpong = PingPongGPU2D(width, height, stride)
+        self.gpu_active = self.pingpong.gpu_active
+        self.needs_upload = self.pingpong.needs_upload
     
     fn upload_from_cpu(
         mut self,
         cpu_ptr: UnsafePointer[UInt8],
         cpu_active: Int,
     ) raises:
-        """Upload CPU grid state to GPU.
-        
-        Args:
-            cpu_ptr: Pointer to CPU buffer to upload
-            cpu_active: Which CPU buffer is active (to sync GPU active)
-        """
-        # Copy to host buffer
-        for i in range(self.grid_size):
-            self.host_buffer[i] = cpu_ptr[i]
-        
-        # Upload to appropriate GPU buffer
-        if cpu_active == 0:
-            self.ctx.enqueue_copy(self.dev_grid_a, self.host_buffer)
-        else:
-            self.ctx.enqueue_copy(self.dev_grid_b, self.host_buffer)
-        self.ctx.synchronize()
-        
-        self.gpu_active = cpu_active
-        self.needs_upload = False
+        self.pingpong.upload_from_cpu(cpu_ptr, cpu_active)
+        self.gpu_active = self.pingpong.gpu_active
+        self.needs_upload = self.pingpong.needs_upload
     
     fn step(mut self) raises:
         """Compute one generation on GPU using persistent buffers."""
         var dims = get_kernel_dims(self.width, self.height)
         
         # Launch kernel based on active buffer
-        # (Avoiding MutAnyOrigin by creating tensors directly in each branch)
-        if self.gpu_active == 0:
-            var read_tensor = LayoutTensor[DType.uint8, grid_layout](self.dev_grid_a)
-            var write_tensor = LayoutTensor[DType.uint8, grid_layout](self.dev_grid_b)
+        if self.pingpong.gpu_active == 0:
+            var read_tensor = LayoutTensor[DType.uint8, grid_layout](self.pingpong.dev_a)
+            var write_tensor = LayoutTensor[DType.uint8, grid_layout](self.pingpong.dev_b)
             
-            self.ctx.enqueue_function_checked[grid_generation_kernel, grid_generation_kernel](
+            self.pingpong.ctx.enqueue_function_checked[grid_generation_kernel, grid_generation_kernel](
                 read_tensor,
                 write_tensor,
                 self.width,
@@ -99,10 +61,10 @@ struct GPUCompute:
                 block_dim=(dims.block_x, dims.block_y),
             )
         else:
-            var read_tensor = LayoutTensor[DType.uint8, grid_layout](self.dev_grid_b)
-            var write_tensor = LayoutTensor[DType.uint8, grid_layout](self.dev_grid_a)
+            var read_tensor = LayoutTensor[DType.uint8, grid_layout](self.pingpong.dev_b)
+            var write_tensor = LayoutTensor[DType.uint8, grid_layout](self.pingpong.dev_a)
             
-            self.ctx.enqueue_function_checked[grid_generation_kernel, grid_generation_kernel](
+            self.pingpong.ctx.enqueue_function_checked[grid_generation_kernel, grid_generation_kernel](
                 read_tensor,
                 write_tensor,
                 self.width,
@@ -113,28 +75,16 @@ struct GPUCompute:
             )
         
         # Swap active buffer
-        self.gpu_active = 1 - self.gpu_active
+        self.pingpong.swap_active()
+        self.gpu_active = self.pingpong.gpu_active
     
-    fn download_to_cpu[O: MutOrigin](
+    fn download_to_cpu(
         mut self,
-        dst_ptr: UnsafePointer[UInt8, origin=O],
+        mut dst: List[UInt8],
     ) raises:
-        """Download current GPU state to CPU buffer.
-        
-        Args:
-            dst_ptr: Pointer to CPU buffer to write to
-        """
-        # Copy from current active GPU buffer to host
-        if self.gpu_active == 0:
-            self.ctx.enqueue_copy(self.host_buffer, self.dev_grid_a)
-        else:
-            self.ctx.enqueue_copy(self.host_buffer, self.dev_grid_b)
-        self.ctx.synchronize()
-        
-        # Copy to CPU
-        for i in range(self.grid_size):
-            dst_ptr[i] = self.host_buffer[i]
+        self.pingpong.download_to_cpu(dst)
     
     fn mark_dirty(mut self):
-        """Mark that CPU state has changed and needs re-upload."""
-        self.needs_upload = True
+        self.pingpong.mark_dirty()
+        self.needs_upload = self.pingpong.needs_upload
+

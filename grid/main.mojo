@@ -218,8 +218,10 @@ fn run_viewer() raises:
                 gpu_compute.step()
                 
                 # Download result to CPU for rendering
-                var dst_ptr = grid.cells_a.unsafe_ptr() if gpu_compute.gpu_active == 0 else grid.cells_b.unsafe_ptr()
-                gpu_compute.download_to_cpu(dst_ptr)
+                if gpu_compute.gpu_active == 0:
+                    gpu_compute.download_to_cpu(grid.cells_a)
+                else:
+                    gpu_compute.download_to_cpu(grid.cells_b)
                 grid.active = gpu_compute.gpu_active
                 
                 var gen_time = Float64(py_time.time() - gen_start) * 1000.0

@@ -85,8 +85,7 @@ fn test_gpu_compute_upload_download_roundtrip() raises:
         compute.upload_from_cpu(src_ptr, 0)
         
         # Download back
-        var dst_ptr = grid.cells_b.unsafe_ptr()
-        compute.download_to_cpu(dst_ptr)
+        compute.download_to_cpu(grid.cells_b)
         
         # Verify data matches
         assert_equal(Int(grid.cells_b[grid._idx(50, 50)]), 1)
@@ -116,8 +115,7 @@ fn test_gpu_cpu_produce_same_result_empty_grid() raises:
         var src_ptr = grid_gpu.cells_a.unsafe_ptr()
         compute.upload_from_cpu(src_ptr, 0)
         compute.step()
-        var dst_ptr = grid_gpu.cells_b.unsafe_ptr()
-        compute.download_to_cpu(dst_ptr)
+        compute.download_to_cpu(grid_gpu.cells_b)
         grid_gpu.active = 1
         
         # Compare results
@@ -154,8 +152,7 @@ fn test_gpu_cpu_produce_same_result_block() raises:
         var src_ptr = grid_gpu.cells_a.unsafe_ptr()
         compute.upload_from_cpu(src_ptr, 0)
         compute.step()
-        var dst_ptr = grid_gpu.cells_b.unsafe_ptr()
-        compute.download_to_cpu(dst_ptr)
+        compute.download_to_cpu(grid_gpu.cells_b)
         grid_gpu.active = 1
         
         # Verify block is stable in both
@@ -189,8 +186,7 @@ fn test_gpu_cpu_produce_same_result_blinker() raises:
         var src_ptr = grid_gpu.cells_a.unsafe_ptr()
         compute.upload_from_cpu(src_ptr, 0)
         compute.step()
-        var dst_ptr = grid_gpu.cells_b.unsafe_ptr()
-        compute.download_to_cpu(dst_ptr)
+        compute.download_to_cpu(grid_gpu.cells_b)
         grid_gpu.active = 1
         
         # Verify vertical blinker in both
