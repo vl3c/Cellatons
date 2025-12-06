@@ -9,10 +9,9 @@ All cells update simultaneously each generation using ping-pong buffers.
 from python import Python, PythonObject
 from sys import has_accelerator
 from memory import UnsafePointer
+from shared.display import DISPLAY_WIDTH, DISPLAY_HEIGHT
 
 # Grid dimensions for 1440p fullscreen
-alias SCREEN_WIDTH: Int = 2560
-alias SCREEN_HEIGHT: Int = 1440
 alias INITIAL_DENSITY: Float64 = 0.15
 
 # SIMD configuration (AVX-512: 64 bytes = 64 cells)

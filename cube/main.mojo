@@ -2,9 +2,12 @@
 
 from python import Python, PythonObject
 from cube.grid import Grid, cube_WIDTH, cube_HEIGHT, cube_DEPTH, INITIAL_DENSITY
-from cube.renderer import RendererConfig, init_display, PythonModuleRenderer
+from shared.renderer.base import RendererConfig, init_display
+from cube.renderer import PythonModuleRenderer
 
 alias TARGET_FPS: Int = 60
+alias DISPLAY_WIDTH: Int = 2560
+alias DISPLAY_HEIGHT: Int = 1440
 
 
 struct ViewerState:
@@ -83,7 +86,15 @@ fn run_viewer() raises:
     print("GPU mode ready")
     
     print("Initializing display...")
-    var config = init_display("cube Automaton (GPU)")
+    var config = init_display(
+        "Cube Automata (GPU)",
+        display_width=DISPLAY_WIDTH,
+        display_height=DISPLAY_HEIGHT,
+        fullscreen=True,
+        noframe=True,
+        grid_width=DISPLAY_WIDTH,
+        grid_height=DISPLAY_HEIGHT,
+    )
     var pygame = config.pygame
     var clock = config.clock
     print("Display:", config.display_width, "x", config.display_height)

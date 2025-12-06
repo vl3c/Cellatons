@@ -1,7 +1,7 @@
 """Tests for Grid Game of Life grid operations."""
 
 from testing import assert_true, assert_equal
-from grid.grid import Grid, SCREEN_WIDTH, SCREEN_HEIGHT, simd_width
+from grid.grid import Grid, DISPLAY_WIDTH, DISPLAY_HEIGHT, simd_width
 
 
 # ─────────────────────────────────────────────────────────────────────────────

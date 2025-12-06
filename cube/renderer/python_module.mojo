@@ -1,8 +1,8 @@
 """Renderer bridge that delegates to Python viewer module."""
 
+from shared.renderer.base import RendererConfig
 from shared.renderer.python_module import PythonModuleBridge
 from cube.grid import cube_WIDTH, cube_HEIGHT, cube_DEPTH
-from cube.renderer.base import RendererConfig
 
 
 struct PythonModuleRenderer:

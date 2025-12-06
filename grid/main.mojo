@@ -19,9 +19,10 @@ Run: pixi run mojo grid/main.mojo
 
 from python import Python, PythonObject
 from sys import has_accelerator
-from grid.grid import Grid, SCREEN_WIDTH, SCREEN_HEIGHT, INITIAL_DENSITY
+from grid.grid import Grid, DISPLAY_WIDTH, DISPLAY_HEIGHT, INITIAL_DENSITY
 from grid.cpu_compute import CPUCompute
-from grid.renderer import RendererConfig, init_display, PythonModuleRenderer
+from shared.renderer.base import RendererConfig, init_display
+from grid.renderer import PythonModuleRenderer
 from grid.benchmark import BenchmarkStats, BenchmarkResult, print_benchmark_summary
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -70,7 +71,7 @@ fn _print_banner() raises:
     print("=" * 60)
     print("Grid Game of Life")
     print("=" * 60)
-    print("Grid:", SCREEN_WIDTH, "x", SCREEN_HEIGHT, "(", SCREEN_WIDTH * SCREEN_HEIGHT, "cells)")
+    print("Grid:", DISPLAY_WIDTH, "x", DISPLAY_HEIGHT, "(", DISPLAY_WIDTH * DISPLAY_HEIGHT, "cells)")
     print("Initial density:", Int(INITIAL_DENSITY * 100), "%")
     print("Target FPS:", TARGET_FPS)
     print()
@@ -134,7 +135,7 @@ fn run_viewer() raises:
     
     # Initialize grid
     print("Initializing grid...")
-    var grid = Grid(SCREEN_WIDTH, SCREEN_HEIGHT)
+    var grid = Grid(DISPLAY_WIDTH, DISPLAY_HEIGHT)
     print("Randomizing with density", Int(INITIAL_DENSITY * 100), "%...")
     grid.randomize(INITIAL_DENSITY)
     
@@ -154,7 +155,15 @@ fn run_viewer() raises:
     
     # Initialize display
     print("Initializing display...")
-    var config = init_display("Grid Game of Life")
+    var config = init_display(
+        "Grid Automata",
+        display_width=DISPLAY_WIDTH,
+        display_height=DISPLAY_HEIGHT,
+        fullscreen=True,
+        noframe=False,
+        grid_width=DISPLAY_WIDTH,
+        grid_height=DISPLAY_HEIGHT,
+    )
     var pygame = config.pygame
     var clock = config.clock
     print("Display:", config.display_width, "x", config.display_height)
@@ -250,7 +259,7 @@ fn run_viewer() raises:
     # Print session stats
     var result = BenchmarkResult(
         gpu_stats^, cpu_stats^, frame_stats^,
-        SCREEN_WIDTH, SCREEN_HEIGHT
+        DISPLAY_WIDTH, DISPLAY_HEIGHT
     )
     print_benchmark_summary(result)
     print("Viewer closed.")

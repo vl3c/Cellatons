@@ -171,10 +171,10 @@ alias PIXELS_PER_CELL: Int = 2  # PNG scale factor
 alias RENDER_PNGS: Bool = False # Enable PNG generation
 ```
 
-### Grid Game of Life (`grid/grid.mojo`)
+### Grid CA (`grid/grid.mojo`)
 ```mojo
-alias SCREEN_WIDTH: Int = 2560   # Display width (1440p)
-alias SCREEN_HEIGHT: Int = 1440  # Display height
+alias DISPLAY_WIDTH: Int = 2560   # Display width (1440p)
+alias DISPLAY_HEIGHT: Int = 1440  # Display height
 alias INITIAL_DENSITY: Float64 = 0.15  # Random fill density
 ```
 

@@ -15,5 +15,4 @@ Components:
 - main.mojo: Live viewer application
 """
 
-from .base import RendererConfig, init_display
 from .python_module import PythonModuleRenderer

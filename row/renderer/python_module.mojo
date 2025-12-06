@@ -7,8 +7,8 @@ Expected performance: ~5-10ms per frame (~100-200 FPS).
 """
 
 from shared.common import WIDTH, HEIGHT
+from shared.renderer.base import RendererConfig
 from shared.renderer.python_module import PythonModuleBridge
-from row.renderer.base import RendererConfig
 
 
 struct PythonModuleRenderer:

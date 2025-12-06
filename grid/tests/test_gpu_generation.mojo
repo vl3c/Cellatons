@@ -2,7 +2,7 @@
 
 from testing import assert_true, assert_equal
 from sys import has_accelerator
-from grid.grid import Grid, SCREEN_WIDTH, SCREEN_HEIGHT
+from grid.grid import Grid, DISPLAY_WIDTH, DISPLAY_HEIGHT
 from grid.cpu_compute import CPUCompute
 
 

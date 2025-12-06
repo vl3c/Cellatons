@@ -4,9 +4,9 @@ Mojo passes grid pointer to Python, all numpy/pygame rendering in pure Python.
 This approach minimizes Python interop overhead by keeping render logic in Python.
 """
 
+from shared.renderer.base import RendererConfig
 from shared.renderer.python_module import PythonModuleBridge
-from grid.grid import SCREEN_WIDTH, SCREEN_HEIGHT
-from grid.renderer.base import RendererConfig
+from grid.grid import DISPLAY_WIDTH, DISPLAY_HEIGHT
 
 
 struct PythonModuleRenderer:
@@ -16,7 +16,7 @@ struct PythonModuleRenderer:
     
     fn __init__(out self, var config: RendererConfig) raises:
         self.config = config^
-        self.bridge = PythonModuleBridge("grid/renderer", SCREEN_WIDTH, SCREEN_HEIGHT)
+        self.bridge = PythonModuleBridge("grid/renderer", DISPLAY_WIDTH, DISPLAY_HEIGHT)
     
     fn name(self) -> String:
         return "python_module"

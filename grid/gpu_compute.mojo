@@ -7,10 +7,10 @@ from sys import has_accelerator
 from gpu.host import DeviceContext, DeviceBuffer, HostBuffer
 from layout import Layout, LayoutTensor
 from grid.gpu_kernels import grid_generation_kernel, get_kernel_dims
-from grid.grid import SCREEN_WIDTH, SCREEN_HEIGHT
+from grid.grid import DISPLAY_WIDTH, DISPLAY_HEIGHT
 
 # Layout for GPU tensors
-alias grid_layout = Layout.row_major(SCREEN_WIDTH * SCREEN_HEIGHT)
+alias grid_layout = Layout.row_major(DISPLAY_WIDTH * DISPLAY_HEIGHT)
 
 
 struct GPUCompute:

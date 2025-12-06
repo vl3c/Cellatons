@@ -8,10 +8,7 @@ Optimized with inlined coordinate wrapping and direct memory access.
 from gpu.host import DeviceContext
 from gpu import block_dim, block_idx, thread_idx, barrier
 from layout import Layout, LayoutTensor
-
-# Grid dimensions for 1440p fullscreen
-alias SCREEN_WIDTH: Int = 2560
-alias SCREEN_HEIGHT: Int = 1440
+from shared.display import DISPLAY_WIDTH, DISPLAY_HEIGHT
 
 # GPU kernel constants
 alias cell_dtype = DType.uint8
@@ -19,7 +16,7 @@ alias gpu_block_x = 16
 alias gpu_block_y = 16
 
 # Compile-time layout
-alias grid_size = SCREEN_WIDTH * SCREEN_HEIGHT
+alias grid_size = DISPLAY_WIDTH * DISPLAY_HEIGHT
 alias grid_layout = Layout.row_major(grid_size)
 
 

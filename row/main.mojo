@@ -109,8 +109,8 @@ fn main() raises:
     # Render if enabled (using fastest method: par grids / SIMD cells)
     @parameter
     if RENDER_PNGS:
-        from row.renderer import Renderer
-        var renderer = Renderer()
+        import row.renderer as png_renderer
+        var renderer = png_renderer.Renderer()
         renderer.save_pngs(grids5a, rule_container)
     
     # Print summary

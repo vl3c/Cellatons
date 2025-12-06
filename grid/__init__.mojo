@@ -16,10 +16,10 @@
 #
 # Run: pixi run mojo grid/main.mojo
 
-from .grid import Grid, SCREEN_WIDTH, SCREEN_HEIGHT, INITIAL_DENSITY
+from .grid import Grid, DISPLAY_WIDTH, DISPLAY_HEIGHT, INITIAL_DENSITY
 from .rules import apply_grid_rules, should_be_alive
 from .cpu_compute import CPUCompute
 from .gpu_kernels import grid_generation_kernel, get_kernel_dims, KernelDims
 from .gpu_compute import GPUCompute
 from .benchmark import BenchmarkStats, BenchmarkResult, print_benchmark_summary, save_benchmark_results
-from .renderer import RendererConfig, init_display, PythonModuleRenderer
+from .renderer import PythonModuleRenderer

@@ -13,10 +13,11 @@ Run: pixi run mojo row/renderer/main.mojo
 
 from python import Python, PythonObject
 from shared.common import WIDTH, HEIGHT
+from shared.display import DISPLAY_WIDTH, DISPLAY_HEIGHT
 from shared.logger import Logger
 from row.grid import Grid
 from row.rule import Rule
-from row.renderer.base import init_display, RendererConfig
+from shared.renderer.base import init_display, RendererConfig
 from row.renderer.python_module import PythonModuleRenderer
 
 
@@ -119,7 +120,15 @@ fn run_viewer() raises:
     var grid_stride = grid.stride
     
     # Initialize display
-    var config = init_display("row CA - Rule 30")
+    var config = init_display(
+        "Row Automata - Rule 30",
+        display_width=DISPLAY_WIDTH,
+        display_height=DISPLAY_HEIGHT,
+        fullscreen=True,
+        noframe=False,
+        grid_width=WIDTH,
+        grid_height=HEIGHT,
+    )
     var pygame = config.pygame
     var clock = config.clock
     var max_scroll = Float64(config.max_scroll_rows())
