@@ -121,19 +121,25 @@ pixi run mojo grid/main.mojo
 - `G` — Toggle GPU/CPU mode
 - `Q` / `ESC` — Quit
 
-### 4. Run Row CA Benchmark
+### 4. Run Row CA Viewer (Interactive)
+```bash
+pixi run mojo row/renderer/main.mojo
+```
+Visualizes the 20K×10K grid playback with pygame at 60 FPS. Use this for live viewing; pause/resume with `SPACE`, reset with `R`, quit with `Q`/`ESC`.
+
+### 5. Run Row CA Benchmark
 ```bash
 pixi run mojo row/main.mojo
 ```
 Runs all execution modes on a 20K×10K grid and prints timing comparison.
 
-### 5. Run Grid Benchmark
+### 6. Run Grid Benchmark
 ```bash
 pixi run mojo grid/run_benchmark.mojo
 ```
 Runs 10,000 generations at 4K resolution, outputs detailed report to `grid_benchmark.txt`.
 
-### 6. Run cube Automaton (GPU-only)
+### 7. Run cube Automaton (GPU-only)
 ```bash
 pixi run mojo cube/main.mojo
 ```
