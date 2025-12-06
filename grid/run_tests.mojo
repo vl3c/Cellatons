@@ -265,5 +265,6 @@ fn run_python_renderer_tests() raises:
     if total_fail > 0 or total_error > 0:
         print("RENDERER TESTS FAILED:", total_fail, "failures,", total_error, "errors")
     else:
-        print("All renderer tests passed!")
+        print("--------")
+        print("All renderer tests passed!\n\n")
 

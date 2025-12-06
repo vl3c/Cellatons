@@ -17,6 +17,7 @@ from shared.benchmarking import (
     save_detailed_report,
 )
 from shared.benchmarking.report import _format_sec3, _format_int
+from shared.logger import Logger
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Constants
@@ -96,6 +97,8 @@ fn _print_benchmark_complete_stats(mode: String, stats: BenchmarkStats) raises:
 
 fn run_benchmark() raises:
     """Run the complete benchmark suite."""
+    var logger = Logger()
+    logger.log("grid benchmark start")
     var py_time = Python.import_module("time")
     
     _print_banner()

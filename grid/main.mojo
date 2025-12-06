@@ -24,6 +24,7 @@ from grid.cpu_compute import CPUCompute
 from shared.renderer.base import RendererConfig, init_display
 from grid.renderer import PythonModuleRenderer
 from shared.benchmarking import BenchmarkStats, BenchmarkResult, print_benchmark_summary
+from shared.logger import Logger
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Constants
@@ -129,14 +130,16 @@ fn run_viewer() raises:
     """Run the Grid Game of Life viewer."""
     from grid.gpu_compute import GPUCompute
     
+    var logger = Logger()
+    logger.log("grid viewer start")
     _print_banner()
     
     var py_time = Python.import_module("time")
     
     # Initialize grid
-    print("Initializing grid...")
+    logger.log("initializing grid")
     var grid = Grid(DISPLAY_WIDTH, DISPLAY_HEIGHT)
-    print("Randomizing with density", Int(INITIAL_DENSITY * 100), "%...")
+    logger.log("randomizing density " + String(Int(INITIAL_DENSITY * 100)) + "%")
     grid.randomize(INITIAL_DENSITY)
     
     # Check GPU availability
@@ -146,15 +149,15 @@ fn run_viewer() raises:
     # Initialize GPU compute
     var gpu_compute: GPUCompute
     if has_gpu:
-        print("GPU detected, initializing persistent GPU buffers...")
+        logger.log("gpu detected; initializing persistent GPU buffers")
         gpu_compute = GPUCompute(grid.width, grid.height, grid.stride)
-        print("GPU mode ready")
+        logger.log("gpu mode ready")
     else:
-        print("No GPU detected, using CPU SIMD mode")
+        logger.log("no gpu detected; using CPU SIMD mode")
         gpu_compute = GPUCompute(1, 1, 1)
     
     # Initialize display
-    print("Initializing display...")
+    logger.log("initializing display")
     var config = init_display(
         "Grid Automata",
         display_width=DISPLAY_WIDTH,
@@ -166,10 +169,8 @@ fn run_viewer() raises:
     )
     var pygame = config.pygame
     var clock = config.clock
-    print("Display:", config.display_width, "x", config.display_height)
-    print()
-    print("Starting simulation...")
-    print()
+    logger.log("display " + String(config.display_width) + " x " + String(config.display_height))
+    logger.log("starting simulation")
     
     # Create renderer
     var renderer = PythonModuleRenderer(config^)

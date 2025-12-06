@@ -4,6 +4,7 @@ from python import Python, PythonObject
 from cube.grid import Grid, cube_WIDTH, cube_HEIGHT, cube_DEPTH, INITIAL_DENSITY
 from shared.renderer.base import RendererConfig, init_display
 from cube.renderer import PythonModuleRenderer
+from shared.logger import Logger
 
 alias TARGET_FPS: Int = 60
 alias DISPLAY_WIDTH: Int = 2560
@@ -67,25 +68,27 @@ fn _handle_events(pygame: PythonObject, mut state: ViewerState) raises:
 fn run_viewer() raises:
     from cube.gpu_compute import GPUCompute
     
+    var logger = Logger()
+    logger.log("cube viewer start")
     _print_banner()
     
     var py_time = Python.import_module("time")
     
-    print("Initializing grid...")
+    logger.log("initializing grid")
     var grid = Grid()
-    print("Randomizing with density", Int(INITIAL_DENSITY * 100), "%...")
+    logger.log("randomizing density " + String(Int(INITIAL_DENSITY * 100)) + "%")
     grid.randomize(INITIAL_DENSITY)
     
     var has_gpu = grid.has_gpu()
     if not has_gpu:
-        print("No GPU detected. cube viewer requires GPU acceleration.")
+        logger.log("no GPU detected; cube viewer requires GPU acceleration")
         return
     
-    print("GPU detected, initializing persistent buffers...")
+    logger.log("gpu detected; initializing persistent buffers")
     var gpu_compute = GPUCompute(grid.width, grid.height, grid.depth, grid.stride, grid.layer_stride)
-    print("GPU mode ready")
+    logger.log("gpu mode ready")
     
-    print("Initializing display...")
+    logger.log("initializing display")
     var config = init_display(
         "Cube Automata (GPU)",
         display_width=DISPLAY_WIDTH,
@@ -97,9 +100,8 @@ fn run_viewer() raises:
     )
     var pygame = config.pygame
     var clock = config.clock
-    print("Display:", config.display_width, "x", config.display_height)
-    print("Starting simulation...")
-    print()
+    logger.log("display " + String(config.display_width) + " x " + String(config.display_height))
+    logger.log("starting simulation")
     
     var renderer = PythonModuleRenderer(config^)
     var state = ViewerState()
