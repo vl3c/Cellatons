@@ -12,7 +12,7 @@ alias TARGET_FPS: Int = 60
 alias MODE_SLICE: Int = 0          # Single W slice
 alias MODE_MAX_INTENSITY: Int = 1  # Max over W
 alias MODE_TILED: Int = 2          # Multiple W slices stacked
-alias MODE_OFF: Int = 3            # Rendering disabled
+alias MODE_TILE_GRID: Int = 3      # W slices tiled into mini-volumes
 alias MODE_COUNT: Int = 4
 
 
@@ -25,6 +25,7 @@ struct ViewerState:
     var last_gen_time_ms: Float64
     var render_mode: Int
     var slice_index: Int
+    var rotation_enabled: Bool
     
     fn __init__(out self):
         self.running = True
@@ -35,6 +36,7 @@ struct ViewerState:
         self.last_gen_time_ms = 0.0
         self.render_mode = MODE_SLICE
         self.slice_index = 0
+        self.rotation_enabled = False
 
 
 fn _mode_name(mode: Int) -> String:
@@ -44,7 +46,9 @@ fn _mode_name(mode: Int) -> String:
         return "Max-Intensity"
     elif mode == MODE_TILED:
         return "Tiled"
-    return "Off"
+    elif mode == MODE_TILE_GRID:
+        return "TileGrid"
+    return "Slice"
 
 
 fn _print_banner():
@@ -54,13 +58,14 @@ fn _print_banner():
     print("Grid:", HYPER_W, "x", HYPER_DEPTH, "x", HYPER_HEIGHT, "x", HYPER_WIDTH)
     print("Rule: B6 / S567 (80-neighbor)")
     print("Initial density:", Int(INITIAL_DENSITY * 100), "%")
-    print("Render modes: Slice, Max-Intensity, Tiled, Off (toggle: T)")
+    print("Render modes: Slice, Max-Intensity, Tiled, TileGrid (toggle: T)")
     print("Target FPS:", TARGET_FPS)
     print()
     print("Controls:")
     print("  SPACE - Pause/Resume")
     print("  R     - Reset (new random grid)")
     print("  T     - Cycle render mode")
+    print("  O     - Toggle rotation")
     print("  [ / ] - Move W slice (Slice mode)")
     print("  Q/ESC - Quit")
     print()
@@ -88,6 +93,9 @@ fn _handle_events(pygame: PythonObject, mut state: ViewerState, w_dim: Int) rais
             elif key == Int(pygame.K_t):
                 state.render_mode = (state.render_mode + 1) % MODE_COUNT
                 print("Render mode:", _mode_name(state.render_mode))
+            elif key == Int(pygame.K_o):
+                state.rotation_enabled = not state.rotation_enabled
+                print("Rotation:", "On" if state.rotation_enabled else "Off")
             elif key == Int(pygame.K_LEFTBRACKET):
                 state.slice_index = (state.slice_index - 1 + w_dim) % w_dim
             elif key == Int(pygame.K_RIGHTBRACKET):
@@ -190,6 +198,7 @@ fn run_viewer() raises:
             grid.height,
             grid.depth,
             grid.w_dim,
+            state.rotation_enabled,
         )
         
         pygame.display.flip()

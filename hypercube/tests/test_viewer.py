@@ -214,10 +214,12 @@ class TestRenderFrame(unittest.TestCase):
         self.assertLess(ys.max(), buf.shape[0] - margin)
         self.assertLess(xs.max(), buf.shape[1] - margin)
 
-    def test_mode_off_draws_nothing(self):
-        """Off mode should not draw voxels."""
-        w_dim, depth, height, stride = 2, 2, 2, 2
-        grid = np.ones((w_dim, depth, height, stride), dtype=np.uint8)
+    def test_tile_grid_runs(self):
+        """TileGrid mode should render content for multiple slices."""
+        w_dim, depth, height, stride = 4, 2, 2, 2
+        grid = np.zeros((w_dim, depth, height, stride), dtype=np.uint8)
+        grid[0, 0, 0, 0] = 1
+        grid[3, 1, 1, 1] = 1
         
         mock_pygame, mock_screen = self._make_mocks()
         
@@ -227,15 +229,15 @@ class TestRenderFrame(unittest.TestCase):
             mock_screen,
             grid,
             320,
-            240,
-            render_mode=3,  # Off
+            320,
+            render_mode=viewer.MODE_TILE_GRID,
             slice_index=0,
             width_logical=2,
             height_logical=2,
             depth_logical=2,
             w_dim=w_dim,
         )
-        self.assertEqual(viewer._state.rgb_buffer.sum(), 0)
+        self.assertTrue(viewer._state.rgb_buffer.sum() > 0)
 
 
 if __name__ == "__main__":

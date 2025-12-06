@@ -5,7 +5,7 @@ Modes (cycled with T):
 - Slice: render a single W slice
 - Max-Intensity: project max over W into 3D
 - Tiled: stack several W slices along depth with gaps
-- Off: skip rendering (status only)
+- TileGrid: lay out W slices in a 2D grid of mini-volumes
 
 Visuals: black background, white live voxels, transparent gray grid lines.
 """
@@ -32,7 +32,18 @@ MAX_VISIBLE_VOXELS = 80_000
 MODE_SLICE = 0
 MODE_MAX = 1
 MODE_TILED = 2
-MODE_OFF = 3
+MODE_TILE_GRID = 3
+
+
+def _w_color(w_idx: int, w_dim: int) -> tuple[int, int, int]:
+    """Map W index to a hue-based RGB for slice/tiled grid modes."""
+    if w_dim <= 0:
+        return VOXEL_COLOR
+    t = (w_idx % w_dim) / max(1, w_dim)
+    r = int(180 + 75 * math.sin(2 * math.pi * t))
+    g = int(140 + 110 * math.sin(2 * math.pi * (t + 1 / 3)))
+    b = int(140 + 110 * math.sin(2 * math.pi * (t + 2 / 3)))
+    return (max(0, min(255, r)), max(0, min(255, g)), max(0, min(255, b)))
 
 
 def create_grid_view(ptr: int, stride: int, height: int, width: int, depth: int, w_dim: int) -> np.ndarray:
@@ -254,9 +265,6 @@ def _prepare_volume(
     cropped = _crop_volume(grid4d, width_logical, height_logical, depth_logical)
     w_dim = cropped.shape[0]
     
-    if render_mode == MODE_OFF:
-        return None, (width_logical, height_logical, depth_logical), "Off", w_dim
-    
     if render_mode == MODE_MAX:
         volume = np.max(cropped, axis=0)
         return volume, (width_logical, height_logical, depth_logical), "Max over W", w_dim
@@ -342,7 +350,13 @@ def _filter_screen(
     return u[valid], v[valid]
 
 
-def _draw_voxel_blocks(u: np.ndarray, v: np.ndarray, display_w: int, display_h: int):
+def _draw_voxel_blocks(
+    u: np.ndarray,
+    v: np.ndarray,
+    display_w: int,
+    display_h: int,
+    color: tuple[int, int, int],
+):
     """Draw each voxel as a small block with a gap for grid lines."""
     full_size = VOXEL_SIZE
     draw_size = max(1, full_size - 1)
@@ -360,7 +374,7 @@ def _draw_voxel_blocks(u: np.ndarray, v: np.ndarray, display_w: int, display_h: 
     if not np.any(mask):
         return
     
-    _state.rgb_buffer[vv[mask], uu[mask], :] = VOXEL_COLOR
+    _state.rgb_buffer[vv[mask], uu[mask], :] = color
 
 
 def _render_voxels(
@@ -369,10 +383,11 @@ def _render_voxels(
     display_w: int,
     display_h: int,
     dims: tuple[int, int, int],
+    color: Optional[tuple[int, int, int]] = None,
+    center: Optional[tuple[float, float]] = None,
+    scale_override: Optional[float] = None,
 ) -> None:
-    """Render live voxels as white points into the rgb buffer."""
-    _state.rgb_buffer.fill(0)
-    
+    """Render live voxels into the rgb buffer."""
     alive = _extract_alive(volume)
     if alive.size == 0:
         return
@@ -380,8 +395,11 @@ def _render_voxels(
     alive = _cap_alive(alive)
     points = _normalize_points(alive, dims)
     
-    scale = min(display_w, display_h) * 0.6
-    cx, cy = display_w * 0.5, display_h * 0.5
+    scale = scale_override if scale_override is not None else min(display_w, display_h) * 0.6
+    if center is None:
+        cx, cy = display_w * 0.5, display_h * 0.5
+    else:
+        cx, cy = center
     u, v, z_depth = _project(points, rot, scale, cx, cy)
     if u is None:
         return
@@ -391,7 +409,45 @@ def _render_voxels(
         return
     u_filt, v_filt = filtered
     
-    _draw_voxel_blocks(u_filt, v_filt, display_w, display_h)
+    voxel_color = color if color is not None else VOXEL_COLOR
+    _draw_voxel_blocks(u_filt, v_filt, display_w, display_h, voxel_color)
+
+
+def _render_tile_grid(
+    grid_np: np.ndarray,
+    rot: np.ndarray,
+    display_w: int,
+    display_h: int,
+    width_logical: int,
+    height_logical: int,
+    depth_logical: int,
+    w_dim: int,
+) -> None:
+    """Render each W slice into a tiled grid of mini-volumes."""
+    if w_dim <= 0:
+        return
+    cols = int(math.ceil(math.sqrt(w_dim)))
+    rows = int(math.ceil(w_dim / cols))
+    tile_w = display_w / cols
+    tile_h = display_h / rows
+    scale = min(tile_w, tile_h) * 0.45
+    
+    for idx in range(w_dim):
+        r = idx // cols
+        c = idx % cols
+        cx = (c + 0.5) * tile_w
+        cy = (r + 0.5) * tile_h
+        volume = grid_np[idx, :depth_logical, :height_logical, :width_logical]
+        _render_voxels(
+            volume,
+            rot,
+            display_w,
+            display_h,
+            (depth_logical, height_logical, width_logical),
+            color=_w_color(idx, w_dim),
+            center=(cx, cy),
+            scale_override=scale,
+        )
 
 
 def _render_status(
@@ -402,8 +458,10 @@ def _render_status(
     gen_time_ms: float,
     mode_label: str,
     slice_label: str,
+    rotation_on: bool,
 ) -> None:
-    text = f"Gen: {generation:,} | {fps} FPS | GPU ({gen_time_ms:.2f}ms) | Mode: {mode_label} | {slice_label}"
+    rot_label = "Rot:on" if rotation_on else "Rot:off"
+    text = f"Gen: {generation:,} | {fps} FPS | GPU ({gen_time_ms:.2f}ms) | Mode: {mode_label} | {slice_label} | {rot_label}"
     surface = _state.font.render(text, True, STATUS_COLOR)
     rect = surface.get_rect()
     rect.topright = (display_width - 16, 12)
@@ -416,8 +474,9 @@ def _render_legend(screen, pygame, display_width: int, display_height: int, mode
         f"Mode: {mode_label}",
         "SPACE: Pause/Resume",
         "R: Reset",
-        "T: Cycle mode (Slice/Max/Tiled/Off)",
+        "T: Cycle mode (Slice/Max/Tiled/TileGrid)",
         "[ ]: Move W slice (Slice mode)",
+        "O: Toggle rotation",
         "Q/ESC: Quit",
     ]
     y = 12
@@ -449,6 +508,7 @@ def render_frame(
     height_logical: int = 0,
     depth_logical: int = 0,
     w_dim: int = 0,
+    rotation_enabled: bool = True,
 ) -> None:
     """Render one frame: grid lines + live voxels + status."""
     if width_logical == 0 or height_logical == 0 or depth_logical == 0 or w_dim == 0:
@@ -471,37 +531,53 @@ def render_frame(
     )
     
     screen.fill(BG_COLOR)
+    _state.rgb_buffer.fill(0)
     
-    if render_mode != MODE_OFF and volume is not None:
-        if not paused:
+    if volume is not None:
+        if rotation_enabled and not paused:
             _state.angle += 0.005
         yaw = _state.angle * 0.7
         pitch = _state.angle * 0.45
         rot = _rotation_matrix(yaw, pitch)
         
-        # Render voxels into rgb_buffer and blit first
-        _render_voxels(
-            volume,
-            rot,
-            display_width,
-            display_height,
-            grid_dims[::-1],  # dims were (width, height, depth)
-        )
-        pygame.surfarray.blit_array(_state.surface, _state.rgb_buffer.swapaxes(0, 1))
-        screen.blit(_state.surface, (0, 0))
-        
-        # Draw grid lines on top
-        _render_grid_lines(pygame, screen, _state.grid_lines, rot, display_width, display_height)
+        if render_mode == MODE_TILE_GRID:
+            _render_tile_grid(
+                grid_np,
+                rot,
+                display_width,
+                display_height,
+                width_logical,
+                height_logical,
+                depth_logical,
+                w_dim,
+            )
+            pygame.surfarray.blit_array(_state.surface, _state.rgb_buffer.swapaxes(0, 1))
+            screen.blit(_state.surface, (0, 0))
+        else:
+            # Render voxels into rgb_buffer and blit first
+            _render_voxels(
+                volume,
+                rot,
+                display_width,
+                display_height,
+                grid_dims[::-1],  # dims were (width, height, depth)
+                color=_w_color(slice_index, w_dim) if render_mode == MODE_SLICE else None,
+            )
+            pygame.surfarray.blit_array(_state.surface, _state.rgb_buffer.swapaxes(0, 1))
+            screen.blit(_state.surface, (0, 0))
+            
+            # Draw grid lines on top
+            _render_grid_lines(pygame, screen, _state.grid_lines, rot, display_width, display_height)
     
     mode_label = {
         MODE_SLICE: "Slice",
         MODE_MAX: "Max-Intensity",
         MODE_TILED: "Tiled",
-        MODE_OFF: "Off",
+        MODE_TILE_GRID: "TileGrid",
     }.get(render_mode, "Slice")
     slice_label = label
     
-    _render_status(screen, display_width, generation, fps, gen_time_ms, mode_label, slice_label)
+    _render_status(screen, display_width, generation, fps, gen_time_ms, mode_label, slice_label, rotation_enabled)
     _render_legend(screen, pygame, display_width, display_height, mode_label)
 
 

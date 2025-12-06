@@ -103,6 +103,7 @@ struct PythonModuleRenderer:
         height_logical: Int = 0,
         depth_logical: Int = 0,
         w_dim: Int = 0,
+        rotation_enabled: Bool = True,
     ) raises:
         """Render the hypercube with status overlay and mode controls."""
         var grid_np = self.bridge.ensure_grid_view(grid_ptr, grid_stride)
@@ -128,6 +129,7 @@ struct PythonModuleRenderer:
             logical_h,
             logical_d,
             logical_w,
+            rotation_enabled,
         )
 
 
