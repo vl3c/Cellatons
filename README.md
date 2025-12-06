@@ -1,6 +1,6 @@
 # Cellatons — Cellular Automata in Mojo 🔥
 
-High-performance cellular automata implementations in [Mojo](https://www.modular.com/mojo), featuring CPU (SIMD-vectorized) and native GPU execution paths. Two complete sub-projects demonstrate both 1D and 2D cellular automata with real-time visualization and comprehensive benchmarking.
+High-performance cellular automata implementations in [Mojo](https://www.modular.com/mojo), featuring CPU (SIMD-vectorized) and native GPU execution paths. Three sub-projects cover 1D, 2D, and 3D automata with real-time visualization and comprehensive benchmarking.
 
 ## Sub-Projects
 
@@ -9,6 +9,9 @@ Rule-based 1D automata (Rule 30, 110, 254, etc.) with pattern evolution from a s
 
 ### 2. Conway's Game of Life (2D)
 Classic 2D simultaneous-update automaton with real-time pygame visualization at 1440p. Interactive controls for pause, reset, and GPU/CPU mode switching.
+
+### 3. Voxel Automaton (3D, GPU-only)
+26-neighbor 3D cellular automaton (B6/S567) running on native GPU kernels. Renders a rotating voxel cube with a transparent gray grid on black background.
 
 ---
 
@@ -31,7 +34,7 @@ Classic 2D simultaneous-update automaton with real-time pygame visualization at 
 
 ## Requirements
 
-- Linux environment (WSL2 on Windows works great)
+- Linux environment (on Windows, run under WSL2)
 - [Pixi](https://pixi.sh) for dependency management
 - Mojo 0.26+ (MAX nightly channel)
 - CUDA-capable GPU (optional, for GPU acceleration)
@@ -130,6 +133,17 @@ pixi run mojo conway/run_benchmark.mojo
 ```
 Runs 10,000 generations at 4K resolution, outputs detailed report to `conway_benchmark.txt`.
 
+### 6. Run Voxel Automaton (GPU-only)
+```bash
+pixi run mojo voxel/main.mojo
+```
+Controls: `SPACE` — Pause/Resume, `R` — Reset, `Q`/`ESC` — Quit
+
+**Windows (WSL2) one-liner** — run inside WSL, pointing to your repo:
+```bash
+wsl -e bash -lc "cd /mnt/c/Path/To/Cellatons && pixi run mojo voxel/main.mojo"
+```
+
 ---
 
 ## Running Tests
@@ -140,6 +154,9 @@ pixi run mojo run_tests.mojo
 
 # Conway's Game of Life tests
 pixi run mojo conway/run_tests.mojo
+
+# Voxel automaton tests
+pixi run mojo voxel/run_tests.mojo
 ```
 
 ---
