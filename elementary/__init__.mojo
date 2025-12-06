@@ -1,2 +1,0 @@
-# Elementary Cellular Automata package
-

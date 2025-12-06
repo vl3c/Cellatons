@@ -4,13 +4,13 @@ High-performance cellular automata implementations in [Mojo](https://www.modular
 
 ## Sub-Projects
 
-### 1. Elementary Cellular Automata (1D)
+### 1. Row Cellular Automata (1D)
 Rule-based 1D automata (Rule 30, 110, 254, etc.) with pattern evolution from a single center cell. Supports massive grids (20K×10K) for deep pattern exploration.
 
-### 2. Conway's Game of Life (2D)
+### 2. Grid Game of Life (2D)
 Classic 2D simultaneous-update automaton with real-time pygame visualization at 1440p. Interactive controls for pause, reset, and GPU/CPU mode switching.
 
-### 3. Voxel Automaton (3D, GPU-only)
+### 3. Cube Automaton (3D, GPU-only)
 26-neighbor 3D cellular automaton (B6/S567) running on native GPU kernels. Renders a rotating voxel cube with a transparent gray grid on black background.
 
 ---
@@ -26,7 +26,7 @@ Classic 2D simultaneous-update automaton with real-time pygame visualization at 
   - CuPy GPU (via Python interop)
   - Native Mojo GPU kernels
 - **Real-time visualization**: pygame-powered viewers with FPS counter and control overlays
-- **PNG export**: Optional Pillow-based image generation for elementary CA patterns
+- **PNG export**: Optional Pillow-based image generation for Row CA patterns
 - **Comprehensive benchmarking**: Detailed timing stats (min/max/avg/stddev) with report generation
 - **Extensive test suites**: 70+ unit tests covering grid operations, rules, CPU/GPU equivalence
 
@@ -59,7 +59,7 @@ Classic 2D simultaneous-update automaton with real-time pygame visualization at 
 │   ├── logger.mojo              # Timestamped logging
 │   └── gpu_timing_result.mojo   # GPU timing stats struct
 │
-├── elementary/                  # 1D Elementary Cellular Automata
+├── row/                       # 1D Row cellular automata
 │   ├── main.mojo                # Entry point (benchmark all modes)
 │   ├── grid.mojo                # Grid struct + CPU/GPU generation
 │   ├── rule.mojo                # Rule definition (3-neighbor patterns)
@@ -70,10 +70,10 @@ Classic 2D simultaneous-update automaton with real-time pygame visualization at 
 │   │   ├── base.mojo            # Renderer configuration
 │   │   ├── python_module.mojo   # Mojo-Python bridge
 │   │   └── viewer.py            # Python-side rendering
-│   ├── run_tests.mojo           # Elementary test runner (Mojo + Python)
+│   ├── run_tests.mojo           # row test runner (Mojo + Python)
 │   └── tests/                   # 40+ unit tests
 │
-├── conway/                      # Conway's Game of Life
+├── grid/                      # Grid Game of Life (2D)
 │   ├── main.mojo                # Entry point (live viewer)
 │   ├── run_benchmark.mojo       # Dedicated benchmark runner
 │   ├── grid.mojo                # Double-buffered 2D grid
@@ -110,9 +110,9 @@ curl -fsSL https://pixi.sh/install.sh | sh
 pixi install
 ```
 
-### 3. Run Conway's Game of Life (Interactive)
+### 3. Run Grid Game of Life (Interactive)
 ```bash
-pixi run mojo conway/main.mojo
+pixi run mojo grid/main.mojo
 ```
 
 **Controls:**
@@ -121,27 +121,27 @@ pixi run mojo conway/main.mojo
 - `G` — Toggle GPU/CPU mode
 - `Q` / `ESC` — Quit
 
-### 4. Run Elementary CA Benchmark
+### 4. Run Row CA Benchmark
 ```bash
-pixi run mojo elementary/main.mojo
+pixi run mojo row/main.mojo
 ```
 Runs all execution modes on a 20K×10K grid and prints timing comparison.
 
-### 5. Run Conway Benchmark
+### 5. Run Grid Benchmark
 ```bash
-pixi run mojo conway/run_benchmark.mojo
+pixi run mojo grid/run_benchmark.mojo
 ```
-Runs 10,000 generations at 4K resolution, outputs detailed report to `conway_benchmark.txt`.
+Runs 10,000 generations at 4K resolution, outputs detailed report to `grid_benchmark.txt`.
 
-### 6. Run Voxel Automaton (GPU-only)
+### 6. Run cube Automaton (GPU-only)
 ```bash
-pixi run mojo voxel/main.mojo
+pixi run mojo cube/main.mojo
 ```
 Controls: `SPACE` — Pause/Resume, `R` — Reset, `Q`/`ESC` — Quit
 
 **Windows (WSL2) one-liner** — run inside WSL, pointing to your repo:
 ```bash
-wsl -e bash -lc "cd /mnt/c/Path/To/Cellatons && pixi run mojo voxel/main.mojo"
+wsl -e bash -lc "cd /mnt/c/Path/To/Cellatons && pixi run mojo cube/main.mojo"
 ```
 
 ---
@@ -149,21 +149,21 @@ wsl -e bash -lc "cd /mnt/c/Path/To/Cellatons && pixi run mojo voxel/main.mojo"
 ## Running Tests
 
 ```bash
-# All elementary tests + renderer tests
-pixi run mojo elementary/run_tests.mojo
+# All Row tests + renderer tests
+pixi run mojo row/run_tests.mojo
 
-# Conway's Game of Life tests
-pixi run mojo conway/run_tests.mojo
+# Grid Game of Life tests
+pixi run mojo grid/run_tests.mojo
 
-# Voxel automaton tests
-pixi run mojo voxel/run_tests.mojo
+# Cube automaton tests
+pixi run mojo cube/run_tests.mojo
 ```
 
 ---
 
 ## Configuration
 
-### Elementary CA (`shared/common.mojo`)
+### Row CA (`shared/common.mojo`)
 ```mojo
 alias WIDTH: Int = 20_000       # Grid width (cells)
 alias HEIGHT: Int = 10_000      # Grid height (rows/generations)
@@ -171,7 +171,7 @@ alias PIXELS_PER_CELL: Int = 2  # PNG scale factor
 alias RENDER_PNGS: Bool = False # Enable PNG generation
 ```
 
-### Conway's Game of Life (`conway/grid.mojo`)
+### Grid Game of Life (`grid/grid.mojo`)
 ```mojo
 alias SCREEN_WIDTH: Int = 2560   # Display width (1440p)
 alias SCREEN_HEIGHT: Int = 1440  # Display height
@@ -189,8 +189,8 @@ Both sub-projects leverage:
 - **Zero-copy rendering**: numpy views over Mojo memory for efficient Python interop
 
 Typical performance on RTX-class GPUs:
-- Elementary CA: 200M+ cells generated in <1s
-- Conway: 8M+ cells/generation at 60+ FPS (GPU mode)
+- Row CA: 200M+ cells generated in <1s
+- grid: 8M+ cells/generation at 60+ FPS (GPU mode)
 
 ---
 
